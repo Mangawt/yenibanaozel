@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /adminasip
+
+Sitemap: https://nozu.me/sitemap.xml
