@@ -19,6 +19,15 @@ class ExternalMediaService
     }
 
     public function search(string $source, string $type, string $query, int $limit = 10): array
+    {
+        return $this->searchAniList($type, $query, $limit);
+    }
+
+    public function import(string $source, string $type, int $id): Media
+    {
+        $payload = $this->fetchAniListDetails($type, $id);
+        $title = $payload['title'] ?: 'Başlıksız';
+        $descriptionOriginal = $payload['description'] ?? null;
 
         return Media::query()->updateOrCreate(
             ['slug' => Media::makeSlug($title, $type, $id)],
@@ -120,17 +129,6 @@ public function importBatch(array $options): array
         'items' => $imported,
     ];
 }
-
-        $imported = [];
-        foreach ($data['Page']['media'] ?? [] as $item) {
-            $imported[] = $this->import('anilist', $type, (int) $item['id']);
-        }
-
-        return [
-            'count' => count($imported),
-            'items' => $imported,
-        ];
-    }
 
     private function searchAniList(string $type, string $query, int $limit): array
     {
