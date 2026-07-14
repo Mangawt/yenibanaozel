@@ -12,20 +12,13 @@ use Illuminate\Support\Str;
 
 class ExternalMediaService
 {
-    public function __construct(private readonly TranslationService $translator)
-    {
+    public function __construct(
+        private readonly TranslationService $translator,
+        private readonly Settings $settings,
+    ) {
     }
 
     public function search(string $source, string $type, string $query, int $limit = 10): array
-    {
-        return $this->searchAniList($type, $query, $limit);
-    }
-
-    public function import(string $source, string $type, int $id): Media
-    {
-        $payload = $this->fetchAniListDetails($type, $id);
-        $title = $payload['title'] ?: 'Başlıksız';
-        $descriptionOriginal = $payload['description'] ?? null;
 
         return Media::query()->updateOrCreate(
             ['slug' => Media::makeSlug($title, $type, $id)],
@@ -80,24 +73,53 @@ class ExternalMediaService
         );
     }
 
-    public function importBatch(array $options): array
-    {
-        $type = $options['type'] ?? 'anime';
-        $perPage = min(max((int) ($options['per_page'] ?? 10), 1), 50);
-        $page = max((int) ($options['page'] ?? 1), 1);
-        $sort = $options['sort'] ?? 'POPULARITY_DESC';
+public function importBatch(array $options): array
+{
+    $type = $options['type'] ?? 'anime';
 
-        $data = $this->aniListGraphql($this->searchQuery(), [
-            'type' => $type === 'manga' ? 'MANGA' : 'ANIME',
-            'search' => filled($options['q'] ?? null) ? $options['q'] : null,
-            'perPage' => $perPage,
-            'page' => $page,
-            'genre' => filled($options['genre'] ?? null) ? $this->toAniListGenre($options['genre']) : null,
-            'seasonYear' => filled($options['year'] ?? null) ? (int) $options['year'] : null,
-            'season' => filled($options['season'] ?? null) ? $options['season'] : null,
-            'format' => filled($options['format'] ?? null) ? $options['format'] : null,
-            'sort' => [$sort],
-        ]);
+    $perPage = min(max((int) ($options['per_page'] ?? 10), 1), 50);
+
+    $key = $type === 'manga'
+        ? 'anilist_manga_last_page'
+        : 'anilist_anime_last_page';
+
+    $page = isset($options['page'])
+        ? max((int) $options['page'], 1)
+        : (int) $this->settings->get($key, 1);
+
+    $sort = $options['sort'] ?? 'POPULARITY_DESC';
+
+    $data = $this->aniListGraphql($this->searchQuery(), [
+        'type' => $type === 'manga' ? 'MANGA' : 'ANIME',
+        'search' => filled($options['q'] ?? null) ? $options['q'] : null,
+        'perPage' => $perPage,
+        'page' => $page,
+        'genre' => filled($options['genre'] ?? null) ? $this->toAniListGenre($options['genre']) : null,
+        'seasonYear' => filled($options['year'] ?? null) ? (int) $options['year'] : null,
+        'season' => filled($options['season'] ?? null) ? $options['season'] : null,
+        'format' => filled($options['format'] ?? null) ? $options['format'] : null,
+        'sort' => [$sort],
+    ]);
+
+    $imported = [];
+
+    foreach ($data['Page']['media'] ?? [] as $item) {
+        $imported[] = $this->import(
+            'anilist',
+            $type,
+            (int) $item['id']
+        );
+    }
+
+    $this->settings->setMany([
+        $key => $page + 1,
+    ]);
+
+    return [
+        'count' => count($imported),
+        'items' => $imported,
+    ];
+}
 
         $imported = [];
         foreach ($data['Page']['media'] ?? [] as $item) {
