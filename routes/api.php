@@ -3,7 +3,7 @@
 use App\Http\Controllers\ApiController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1')->group(function (): void {
+Route::prefix('v1')->middleware('throttle:30,1')->group(function (): void {
     Route::get('/search', [ApiController::class, 'search'])->name('api.search');
     Route::post('/bulk-import', [ApiController::class, 'bulkImport'])->name('api.bulk-import');
     Route::get('/anime/{media:slug}', [ApiController::class, 'show'])

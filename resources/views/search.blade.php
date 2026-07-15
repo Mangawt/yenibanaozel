@@ -4,48 +4,48 @@
     <section class="filter-hero compact">
         <form class="ani-filter" action="{{ route('search') }}" method="get">
             <label>
-                <span>Search</span>
-                <input type="search" name="q" value="{{ $query }}" placeholder="Başlık ara">
+                <span>Arama</span>
+                <input class="js-autocomplete" type="search" name="q" value="{{ $query }}" placeholder="Başlık ara" autocomplete="off">
             </label>
             <label>
-                <span>Type</span>
+                <span>Tip</span>
                 <select name="type">
-                    <option value="">Any</option>
+                    <option value="">Tümü</option>
                     <option value="anime" @selected($type === 'anime')>Anime</option>
                     <option value="manga" @selected($type === 'manga')>Manga</option>
                 </select>
             </label>
             <label>
-                <span>Genres</span>
+                <span>Türler</span>
                 <select name="genre">
-                    <option value="">Any</option>
+                    <option value="">Tümü</option>
                     @foreach($genres as $label)
                         <option value="{{ $label }}" @selected($genre === $label)>{{ $label }}</option>
                     @endforeach
                 </select>
             </label>
             <label>
-                <span>Year</span>
+                <span>Yıl</span>
                 <select name="year">
-                    <option value="">Any</option>
+                    <option value="">Tümü</option>
                     @for($optionYear = now()->year + 1; $optionYear >= 1980; $optionYear--)
                         <option value="{{ $optionYear }}" @selected((string) $optionYear === (string) $year)>{{ $optionYear }}</option>
                     @endfor
                 </select>
             </label>
             <label>
-                <span>Season</span>
+                <span>Sezon</span>
                 <select name="season">
-                    <option value="">Any</option>
+                    <option value="">Tümü</option>
                     @foreach($seasons as $label)
                         <option value="{{ $label }}" @selected($season === $label)>{{ $label }}</option>
                     @endforeach
                 </select>
             </label>
             <label>
-                <span>Format</span>
+                <span>Biçim</span>
                 <select name="format">
-                    <option value="">Any</option>
+                    <option value="">Tümü</option>
                     @foreach($formats as $label)
                         <option value="{{ $label }}" @selected($format === $label)>{{ $label }}</option>
                     @endforeach
@@ -55,7 +55,7 @@
         </form>
     </section>
 
-    <x-section-title title="SONUÇLAR" />
+    <x-section-title title="Sonuçlar" />
     <div class="poster-grid">
         @forelse($items as $item)
             @include('components.media-card', ['item' => $item])

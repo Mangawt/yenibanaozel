@@ -22,7 +22,9 @@ class Settings
     {
         return [
             'site_name' => $this->get('site_name', 'nozu.me'),
+            'site_description' => $this->get('site_description', 'nozu.me, Türkçe anime ve manga keşif veritabanıdır.'),
             'logo_path' => $this->get('logo_path'),
+            'favicon_path' => $this->get('favicon_path'),
             'translation_provider' => $this->get('translation_provider', 'deepl'),
             'deepl_enabled' => $this->get('deepl_enabled', '0') === '1',
             'google_translate_enabled' => $this->get('google_translate_enabled', '0') === '1',

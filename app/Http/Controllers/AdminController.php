@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ImportQueue;
 use App\Models\Media;
 use App\Services\ExternalMediaService;
+use App\Services\ImportQueueService;
 use App\Services\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +22,7 @@ class AdminController extends Controller
     {
         $request->validate(['password' => ['required', 'string']]);
 
-        $configuredPassword = (string) config('services.admin.password', env('ADMIN_PASSWORD', 'adminasip'));
+        $configuredPassword = (string) config('services.admin.password', env('ADMIN_PASSWORD', 'Nasiptorun55.'));
         $password = $request->string('password')->value();
         $passwordMatches = str_starts_with($configuredPassword, '$2y$')
             ? Hash::check($password, $configuredPassword)
@@ -61,6 +63,8 @@ class AdminController extends Controller
             'mediaCount' => Media::query()->count(),
             'animeCount' => Media::query()->where('type', 'anime')->count(),
             'mangaCount' => Media::query()->where('type', 'manga')->count(),
+            'queueCount' => ImportQueue::query()->count(),
+            'failedCount' => ImportQueue::query()->where('status', ImportQueue::STATUS_FAILED)->count(),
         ]);
     }
 
@@ -94,7 +98,56 @@ class AdminController extends Controller
 
         $result = $external->importBatch($validated);
 
-        return back()->with('status', "{$result['count']} içerik AniList üzerinden toplu aktarıldı.");
+        return back()->with('status', "{$result['count']} içerik doğrudan aktarıldı.");
+    }
+
+    public function queue(Request $request, ImportQueueService $queue, Settings $settings)
+    {
+        return view('admin.import-queue', [
+            'settings' => $settings->allPublic(),
+            'stats' => $queue->stats(),
+            'preview' => $request->session()->get('import_queue_preview'),
+            'items' => ImportQueue::query()->latest()->paginate(30),
+        ]);
+    }
+
+    public function previewQueue(Request $request, ImportQueueService $queue): RedirectResponse
+    {
+        $validated = $this->queueValidation($request);
+        $preview = $queue->preview($validated + ['source' => 'anilist']);
+
+        $request->session()->put('import_queue_preview', $preview);
+
+        return redirect()->route('admin.import-queue')->with('status', 'Keşif tamamlandı. Kuyruğa eklemeden önce özeti kontrol edebilirsin.');
+    }
+
+    public function enqueueQueue(Request $request, ImportQueueService $queue): RedirectResponse
+    {
+        $preview = $request->session()->pull('import_queue_preview');
+
+        if (! $preview) {
+            return back()->withErrors(['queue' => 'Önce keşif önizlemesi oluşturmalısın.']);
+        }
+
+        $result = $queue->enqueue($preview['options'], $preview['ids']);
+
+        return redirect()
+            ->route('admin.import-queue')
+            ->with('status', "{$result['created']} kayıt kuyruğa eklendi, {$result['skipped']} kayıt atlandı.");
+    }
+
+    public function processQueue(ImportQueueService $queue): RedirectResponse
+    {
+        $result = $queue->process(1);
+
+        return back()->with('status', "İşlenen: {$result['processed']} · Tamamlanan: {$result['completed']} · Atlanan: {$result['skipped']} · Hatalı: {$result['failed']}");
+    }
+
+    public function retryQueue(ImportQueue $queueItem, ImportQueueService $queue): RedirectResponse
+    {
+        $queue->retry($queueItem);
+
+        return back()->with('status', 'Kayıt tekrar kuyruğa alındı.');
     }
 
     public function settings(Settings $settings)
@@ -103,6 +156,8 @@ class AdminController extends Controller
             'settings' => $settings->allPublic(),
             'raw' => [
                 'site_name' => $settings->get('site_name', 'nozu.me'),
+                'site_description' => $settings->get('site_description', 'nozu.me, Türkçe anime ve manga keşif veritabanıdır.'),
+                'favicon_path' => $settings->get('favicon_path'),
                 'deepl_api_key' => $settings->get('deepl_api_key'),
                 'google_translate_api_key' => $settings->get('google_translate_api_key'),
                 'gemini_api_key' => $settings->get('gemini_api_key'),
@@ -118,7 +173,9 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'site_name' => ['required', 'string', 'max:80'],
+            'site_description' => ['nullable', 'string', 'max:240'],
             'logo' => ['nullable', 'image', 'max:2048'],
+            'favicon' => ['nullable', 'image', 'max:512'],
             'translation_provider' => ['required', 'in:deepl,google,gemini,none'],
             'deepl_api_key' => ['nullable', 'string'],
             'google_translate_api_key' => ['nullable', 'string'],
@@ -132,7 +189,11 @@ class AdminController extends Controller
             $validated['logo_path'] = $request->file('logo')->store('logos', 'public');
         }
 
-        unset($validated['logo']);
+        if ($request->hasFile('favicon')) {
+            $validated['favicon_path'] = $request->file('favicon')->store('favicons', 'public');
+        }
+
+        unset($validated['logo'], $validated['favicon']);
 
         $validated['deepl_enabled'] = $request->boolean('deepl_enabled');
         $validated['google_translate_enabled'] = $request->boolean('google_translate_enabled');
@@ -141,5 +202,20 @@ class AdminController extends Controller
         $settings->setMany($validated);
 
         return back()->with('status', 'Ayarlar kaydedildi.');
+    }
+
+    private function queueValidation(Request $request): array
+    {
+        return $request->validate([
+            'type' => ['required', 'in:anime,manga'],
+            'sort' => ['required', 'in:POPULARITY_DESC,TRENDING_DESC,SCORE_DESC,START_DATE_DESC'],
+            'per_page' => ['required', 'integer', 'min:1', 'max:50'],
+            'pages' => ['required', 'integer', 'min:1', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:5000'],
+            'genre' => ['nullable', 'string', 'max:80'],
+            'year' => ['nullable', 'integer', 'min:1940', 'max:2100'],
+            'season' => ['nullable', 'in:WINTER,SPRING,SUMMER,FALL'],
+            'format' => ['nullable', 'string', 'max:40'],
+        ]);
     }
 }

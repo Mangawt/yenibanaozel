@@ -25,6 +25,7 @@ class TranslationService
             'deepl' => $this->translateWithDeepL($text),
             'google' => $this->translateWithGoogle($text),
             'gemini' => $this->translateWithGemini($text),
+            'none' => $text,
             default => $this->translateWithPublicGoogle($text),
         };
     }

@@ -25,7 +25,7 @@
         </div>
     </article>
 
-    <nav class="detail-tabs">
+    <nav class="detail-tabs pretty-tabs">
         <a href="#overview">Özet</a>
         <a href="#characters">Karakterler</a>
         <a href="#staff">Ekip</a>
@@ -43,20 +43,36 @@
                 </div>
             @endif
 
-            <div class="info-box">
+            <div class="info-box info-cards">
                 @if($media->next_airing_episode)<p><span>Yayın</span><strong>Bölüm {{ $media->next_airing_episode['episode'] ?? '-' }}</strong></p>@endif
-                @if($media->format)<p><span>Format</span><strong>{{ $media->format }}</strong></p>@endif
+                @if($media->format)<p><span>Biçim</span><strong>{{ $media->format }}</strong></p>@endif
                 @if($media->episodes)<p><span>Bölüm</span><strong>{{ $media->episodes }}</strong></p>@endif
                 @if($media->chapters)<p><span>Bölüm</span><strong>{{ $media->chapters }}</strong></p>@endif
                 @if($media->volumes)<p><span>Cilt</span><strong>{{ $media->volumes }}</strong></p>@endif
                 @if($media->duration)<p><span>Süre</span><strong>{{ $media->duration }} dk</strong></p>@endif
                 @if($media->status)<p><span>Durum</span><strong>{{ $media->status }}</strong></p>@endif
+                @if($media->title_native)<p><span>Japonca ad</span><strong>{{ $media->title_native }}</strong></p>@endif
+                @if($media->title_english)<p><span>İngilizce ad</span><strong>{{ $media->title_english }}</strong></p>@endif
                 @if($media->start_date)<p><span>Başlangıç</span><strong>{{ $media->start_date->format('d.m.Y') }}</strong></p>@endif
                 @if($media->season || $media->season_year)<p><span>Sezon</span><strong>{{ trim(($media->season ?? '').' '.($media->season_year ?? '')) }}</strong></p>@endif
-                @if($media->average_score)<p><span>Ortalama Puan</span><strong>{{ $media->average_score }}%</strong></p>@endif
+                @if($media->average_score)<p><span>Ortalama puan</span><strong>{{ $media->average_score }}%</strong></p>@endif
+                @if($media->mean_score)<p><span>Genel puan</span><strong>{{ $media->mean_score }}%</strong></p>@endif
                 @if($media->popularity)<p><span>Popülerlik</span><strong>{{ number_format($media->popularity, 0, ',', '.') }}</strong></p>@endif
-                @if(count($media->studios ?? []))<p><span>Stüdyo</span><strong>{{ implode(', ', $media->studios) }}</strong></p>@endif
-                @if(count($media->producers ?? []))<p><span>Yapımcı</span><strong>{{ implode(', ', $media->producers) }}</strong></p>@endif
+                @if($media->favourites)<p><span>Favori</span><strong>{{ number_format($media->favourites, 0, ',', '.') }}</strong></p>@endif
+                @if(count($media->studios ?? []))
+                    <p><span>Stüdyo</span><strong>
+                        @foreach($media->studios as $studio)
+                            <a href="{{ route('studios.show', \Illuminate\Support\Str::slug($studio)) }}">{{ $studio }}</a>@if(! $loop->last), @endif
+                        @endforeach
+                    </strong></p>
+                @endif
+                @if(count($media->producers ?? []))
+                    <p><span>Yapımcı</span><strong>
+                        @foreach($media->producers as $producer)
+                            <a href="{{ route('studios.show', \Illuminate\Support\Str::slug($producer)) }}">{{ $producer }}</a>@if(! $loop->last), @endif
+                        @endforeach
+                    </strong></p>
+                @endif
                 @if($media->source)<p><span>Kaynak türü</span><strong>{{ $media->source }}</strong></p>@endif
             </div>
 
@@ -153,8 +169,10 @@
             <section class="content-section" id="stats">
                 <h2>İstatistik</h2>
                 <div class="stat-grid inline">
-                    @if($media->average_score)<div><span>Ortalama Puan</span><strong>{{ $media->average_score }}%</strong></div>@endif
+                    @if($media->average_score)<div><span>Ortalama puan</span><strong>{{ $media->average_score }}%</strong></div>@endif
+                    @if($media->mean_score)<div><span>Genel puan</span><strong>{{ $media->mean_score }}%</strong></div>@endif
                     @if($media->popularity)<div><span>Popülerlik</span><strong>{{ number_format($media->popularity, 0, ',', '.') }}</strong></div>@endif
+                    @if($media->favourites)<div><span>Favori</span><strong>{{ number_format($media->favourites, 0, ',', '.') }}</strong></div>@endif
                     @if($media->start_year)<div><span>Yıl</span><strong>{{ $media->start_year }}</strong></div>@endif
                     @if($media->country_of_origin)<div><span>Ülke</span><strong>{{ $media->country_of_origin }}</strong></div>@endif
                 </div>
@@ -195,7 +213,7 @@
 
     @if($related->isNotEmpty())
         <x-section-title title="Bunları da beğenebilirsin" />
-        <div class="poster-grid compact-posters">
+        <div class="poster-grid compact-posters related-grid">
             @foreach($related as $item)
                 @include('components.media-card', ['item' => $item])
             @endforeach

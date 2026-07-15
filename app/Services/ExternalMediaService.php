@@ -20,11 +20,28 @@ class ExternalMediaService
 
     public function search(string $source, string $type, string $query, int $limit = 10): array
     {
+        if ($source !== 'anilist') {
+            throw new \InvalidArgumentException('Bu kaynak henüz desteklenmiyor.');
+        }
+
         return $this->searchAniList($type, $query, $limit);
     }
 
     public function import(string $source, string $type, int $id): Media
     {
+        $existing = Media::query()
+            ->where('type', $type)
+            ->where('source_ids', 'like', '%"'.$source.'":'.$id.'%')
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        if ($source !== 'anilist') {
+            throw new \InvalidArgumentException('Bu kaynak henüz desteklenmiyor.');
+        }
+
         $payload = $this->fetchAniListDetails($type, $id);
         $title = $payload['title'] ?: 'Başlıksız';
         $descriptionOriginal = $payload['description'] ?? null;
@@ -45,7 +62,9 @@ class ExternalMediaService
                 'format' => $payload['format'] ?? null,
                 'status' => $payload['status'] ?? null,
                 'average_score' => $payload['average_score'] ?? null,
+                'mean_score' => $payload['mean_score'] ?? null,
                 'popularity' => $payload['popularity'] ?? null,
+                'favourites' => $payload['favourites'] ?? null,
                 'episodes' => $payload['episodes'] ?? null,
                 'chapters' => $payload['chapters'] ?? null,
                 'volumes' => $payload['volumes'] ?? null,
@@ -82,53 +101,76 @@ class ExternalMediaService
         );
     }
 
-public function importBatch(array $options): array
-{
-    $type = $options['type'] ?? 'anime';
+    public function discoverIds(array $options): array
+    {
+        $source = $options['source'] ?? 'anilist';
+        $type = $options['type'] ?? 'anime';
 
-    $perPage = min(max((int) ($options['per_page'] ?? 10), 1), 50);
+        if ($source !== 'anilist') {
+            throw new \InvalidArgumentException('Bu kaynak henüz desteklenmiyor.');
+        }
 
-    $key = $type === 'manga'
-        ? 'anilist_manga_last_page'
-        : 'anilist_anime_last_page';
+        $perPage = min(max((int) ($options['per_page'] ?? 50), 1), 50);
+        $pages = min(max((int) ($options['pages'] ?? 1), 1), 100);
+        $startPage = max((int) ($options['page'] ?? 1), 1);
+        $sort = $options['sort'] ?? 'POPULARITY_DESC';
+        $ids = [];
 
-    $page = isset($options['page'])
-        ? max((int) $options['page'], 1)
-        : (int) $this->settings->get($key, 1);
+        for ($page = $startPage; $page < $startPage + $pages; $page++) {
+            $data = $this->aniListGraphql($this->discoveryQuery(), [
+                'type' => $type === 'manga' ? 'MANGA' : 'ANIME',
+                'perPage' => $perPage,
+                'page' => $page,
+                'genre' => filled($options['genre'] ?? null) ? $this->toAniListGenre($options['genre']) : null,
+                'seasonYear' => filled($options['year'] ?? null) ? (int) $options['year'] : null,
+                'season' => filled($options['season'] ?? null) ? $options['season'] : null,
+                'format' => filled($options['format'] ?? null) ? $options['format'] : null,
+                'sort' => [$sort],
+            ]);
 
-    $sort = $options['sort'] ?? 'POPULARITY_DESC';
+            foreach ($data['Page']['media'] ?? [] as $item) {
+                if (! empty($item['id'])) {
+                    $ids[] = (int) $item['id'];
+                }
+            }
+        }
 
-    $data = $this->aniListGraphql($this->searchQuery(), [
-        'type' => $type === 'manga' ? 'MANGA' : 'ANIME',
-        'search' => filled($options['q'] ?? null) ? $options['q'] : null,
-        'perPage' => $perPage,
-        'page' => $page,
-        'genre' => filled($options['genre'] ?? null) ? $this->toAniListGenre($options['genre']) : null,
-        'seasonYear' => filled($options['year'] ?? null) ? (int) $options['year'] : null,
-        'season' => filled($options['season'] ?? null) ? $options['season'] : null,
-        'format' => filled($options['format'] ?? null) ? $options['format'] : null,
-        'sort' => [$sort],
-    ]);
-
-    $imported = [];
-
-    foreach ($data['Page']['media'] ?? [] as $item) {
-        $imported[] = $this->import(
-            'anilist',
-            $type,
-            (int) $item['id']
-        );
+        return array_values(array_unique($ids));
     }
 
-    $this->settings->setMany([
-        $key => $page + 1,
-    ]);
+    public function importBatch(array $options): array
+    {
+        $type = $options['type'] ?? 'anime';
+        $perPage = min(max((int) ($options['per_page'] ?? 10), 1), 50);
+        $key = $type === 'manga' ? 'anilist_manga_last_page' : 'anilist_anime_last_page';
+        $page = isset($options['page']) ? max((int) $options['page'], 1) : (int) $this->settings->get($key, 1);
+        $sort = $options['sort'] ?? 'POPULARITY_DESC';
 
-    return [
-        'count' => count($imported),
-        'items' => $imported,
-    ];
-}
+        $data = $this->aniListGraphql($this->searchQuery(), [
+            'type' => $type === 'manga' ? 'MANGA' : 'ANIME',
+            'search' => filled($options['q'] ?? null) ? $options['q'] : null,
+            'perPage' => $perPage,
+            'page' => $page,
+            'genre' => filled($options['genre'] ?? null) ? $this->toAniListGenre($options['genre']) : null,
+            'seasonYear' => filled($options['year'] ?? null) ? (int) $options['year'] : null,
+            'season' => filled($options['season'] ?? null) ? $options['season'] : null,
+            'format' => filled($options['format'] ?? null) ? $options['format'] : null,
+            'sort' => [$sort],
+        ]);
+
+        $imported = [];
+
+        foreach ($data['Page']['media'] ?? [] as $item) {
+            $imported[] = $this->import('anilist', $type, (int) $item['id']);
+        }
+
+        $this->settings->setMany([$key => $page + 1]);
+
+        return [
+            'count' => count($imported),
+            'items' => $imported,
+        ];
+    }
 
     private function searchAniList(string $type, string $query, int $limit): array
     {
@@ -218,13 +260,15 @@ public function importBatch(array $options): array
             'format' => AnimeLabels::format($item['format'] ?? null),
             'status' => AnimeLabels::status($item['status'] ?? null),
             'average_score' => $item['averageScore'] ?? null,
+            'mean_score' => $item['meanScore'] ?? null,
             'popularity' => $item['popularity'] ?? null,
+            'favourites' => $item['favourites'] ?? null,
             'episodes' => $item['episodes'] ?? null,
             'chapters' => $item['chapters'] ?? null,
             'volumes' => $item['volumes'] ?? null,
             'duration' => $item['duration'] ?? null,
             'country_of_origin' => $item['countryOfOrigin'] ?? null,
-            'source' => AnimeLabels::format($item['source'] ?? null) ?? $item['source'] ?? null,
+            'source' => AnimeLabels::source($item['source'] ?? null),
             'hashtag' => $item['hashtag'] ?? null,
             'site_url' => $item['siteUrl'] ?? null,
             'season' => AnimeLabels::season($item['season'] ?? null),
@@ -294,6 +338,19 @@ public function importBatch(array $options): array
         ';
     }
 
+    private function discoveryQuery(): string
+    {
+        return '
+            query ($type: MediaType, $perPage: Int, $page: Int, $genre: String, $seasonYear: Int, $season: MediaSeason, $format: MediaFormat, $sort: [MediaSort]) {
+                Page(page: $page, perPage: $perPage) {
+                    media(type: $type, genre: $genre, seasonYear: $seasonYear, season: $season, format: $format, isAdult: false, sort: $sort) {
+                        id
+                    }
+                }
+            }
+        ';
+    }
+
     private function detailsQuery(): string
     {
         return '
@@ -333,7 +390,7 @@ public function importBatch(array $options): array
                     rankings { rank type format year season allTime context }
                     externalLinks { site url type language icon color }
                     streamingEpisodes { title thumbnail url site }
-                    staff(perPage: 16, sort: RELEVANCE) { edges { role node { id name { full } image { large } } } }
+                    staff(perPage: 32, sort: RELEVANCE) { edges { role node { id name { full } image { large } } } }
                     relations {
                         edges {
                             relationType
@@ -344,14 +401,14 @@ public function importBatch(array $options): array
                             }
                         }
                     }
-                    characters(perPage: 16, sort: ROLE) {
+                    characters(perPage: 32, sort: ROLE) {
                         edges {
                             role
                             node { id name { full } image { large } }
                             voiceActors(language: JAPANESE, sort: RELEVANCE) { id name { full } image { large } }
                         }
                     }
-                    recommendations(perPage: 16, sort: RATING_DESC) {
+                    recommendations(perPage: 24, sort: RATING_DESC) {
                         nodes {
                             mediaRecommendation {
                                 id type format averageScore
@@ -446,4 +503,3 @@ public function importBatch(array $options): array
         ]);
     }
 }
-

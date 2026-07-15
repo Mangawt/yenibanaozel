@@ -4,7 +4,7 @@
     <section class="api-hero">
         <p class="eyebrow">nozu.me API</p>
         <h1>Türkçe anime ve manga verisini uygulamana bağla</h1>
-        <p>nozu.me API; Türkçeleştirilmiş tür/format/durum alanları, yerel görsel bağlantıları, karakterler, ilişkiler, ekip, etiketler ve istatistiklerle JSON olarak sunar.</p>
+        <p>nozu.me API; Türkçeleştirilmiş tür/format/durum alanları, yerel görsel bağlantıları, karakterler, ilişkiler, ekip, etiketler, bağlantılar ve istatistiklerle JSON olarak sunar.</p>
     </section>
 
     <section class="docs-grid">
@@ -22,30 +22,24 @@ GET {{ url('/api/v1/manga/{slug}') }}</code></pre>
         </article>
 
         <article class="panel docs">
-            <h2>3. Toplu içe aktarma</h2>
-            <p>Admin akışını API üzerinden kullanmak için toplu kayıt çekebilirsin.</p>
-            <pre><code>POST {{ url('/api/v1/bulk-import') }}
-{
-  "type": "anime",
-  "sort": "POPULARITY_DESC",
-  "per_page": 10,
-  "genre": "Aksiyon",
-  "year": 2026
-}</code></pre>
+            <h2>3. Kullanım limiti</h2>
+            <p>Herkese açık API dakikada 30 istek sınırıyla çalışır.</p>
+            <pre><code>HTTP 429 Too Many Requests</code></pre>
         </article>
 
         <article class="panel docs">
             <h2>4. Dönen ana alanlar</h2>
-            <p>Yanıt; başlıklar, Türkçe özet, yerel görseller, türler, karakterler, ilişkiler, öneriler, staff, dış bağlantılar ve dağılım istatistiklerini içerir.</p>
+            <p>Yanıt; başlıklar, Türkçe özet, yerel görseller, türler, karakterler, ilişkiler, öneriler, ekip, resmi bağlantılar, yayın bağlantıları ve dağılım istatistiklerini içerir.</p>
             <pre><code>{
   "data": [{
     "type": "anime",
-    "title": {"romaji": "Naruto"},
+    "title": {"romaji": "Naruto", "native": "NARUTO -ナルト-"},
     "genres": ["Aksiyon", "Macera", "Dram"],
     "cover_image": "/storage/media/anime/20/covers/...",
     "characters": [],
     "relations": [],
     "rankings": [],
+    "external_links": [],
     "stats": {}
   }]
 }</code></pre>

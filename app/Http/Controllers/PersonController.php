@@ -9,6 +9,49 @@ use Illuminate\Support\Str;
 
 class PersonController extends Controller
 {
+    public function index(Settings $settings)
+    {
+        $people = [];
+
+        foreach (Media::query()->latest('popularity')->get() as $media) {
+            foreach (($media->characters ?? []) as $character) {
+                if (! filled($character['voice_actor'] ?? null)) {
+                    continue;
+                }
+
+                $slug = Str::slug($character['voice_actor']);
+                $people[$slug] ??= [
+                    'name' => $character['voice_actor'],
+                    'slug' => $slug,
+                    'image' => $character['voice_actor_image'] ?? null,
+                    'count' => 0,
+                ];
+                $people[$slug]['count']++;
+            }
+
+            foreach (($media->staff ?? []) as $staff) {
+                if (! filled($staff['name'] ?? null)) {
+                    continue;
+                }
+
+                $slug = Str::slug($staff['name']);
+                $people[$slug] ??= [
+                    'name' => $staff['name'],
+                    'slug' => $slug,
+                    'image' => $staff['image'] ?? null,
+                    'count' => 0,
+                ];
+                $people[$slug]['count']++;
+            }
+        }
+
+        return view('people.index', [
+            'settings' => $settings->allPublic(),
+            'people' => collect($people)->sortBy('name')->values(),
+            'seo' => Seo::defaults(['title' => 'Sanatçılar - nozu.me']),
+        ]);
+    }
+
     public function show(string $slug, Settings $settings)
     {
         $credits = [];

@@ -71,6 +71,24 @@ class AnimeLabels
         'CONTAINS' => 'İçerir',
     ];
 
+    public const SOURCES = [
+        'ORIGINAL' => 'Orijinal',
+        'MANGA' => 'Manga',
+        'LIGHT_NOVEL' => 'Light Novel',
+        'VISUAL_NOVEL' => 'Visual Novel',
+        'VIDEO_GAME' => 'Video Oyunu',
+        'OTHER' => 'Diğer',
+        'NOVEL' => 'Roman',
+        'DOUJINSHI' => 'Doujinshi',
+        'ANIME' => 'Anime',
+        'WEB_NOVEL' => 'Web Romanı',
+        'LIVE_ACTION' => 'Live Action',
+        'GAME' => 'Oyun',
+        'COMIC' => 'Çizgi Roman',
+        'MULTIMEDIA_PROJECT' => 'Multimedya Projesi',
+        'PICTURE_BOOK' => 'Resimli Kitap',
+    ];
+
     public const STAFF_ROLES = [
         'Original Creator' => 'Orijinal Yaratıcı',
         'Original Story' => 'Orijinal Hikaye',
@@ -127,6 +145,11 @@ class AnimeLabels
     public static function relation(?string $value): ?string
     {
         return $value ? (self::RELATIONS[$value] ?? $value) : null;
+    }
+
+    public static function source(?string $value): ?string
+    {
+        return $value ? (self::SOURCES[$value] ?? self::format($value) ?? $value) : null;
     }
 
     public static function staffRole(?string $value): ?string

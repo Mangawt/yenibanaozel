@@ -12,11 +12,24 @@ class HomeController extends Controller
 {
     public function index(Settings $settings)
     {
+        $currentSeason = AnimeLabels::season(now()->month <= 3 ? 'WINTER' : (now()->month <= 6 ? 'SPRING' : (now()->month <= 9 ? 'SUMMER' : 'FALL')));
         return view('home', [
             'settings' => $settings->allPublic(),
-            'trending' => Media::query()->where('type', 'anime')->latest('popularity')->limit(16)->get(),
-            'topAnime' => Media::query()->where('type', 'anime')->latest('average_score')->limit(16)->get(),
-            'topManga' => Media::query()->where('type', 'manga')->latest('average_score')->limit(16)->get(),
+            'heroItems' => Media::query()->whereNotNull('banner_image')->latest('popularity')->limit(5)->get(),
+            'trending' => Media::query()->latest('popularity')->limit(5)->get(),
+            'seasonPopular' => Media::query()
+                ->where('season', $currentSeason)
+                ->latest('average_score')
+                ->limit(5)
+                ->get(),
+            'upcoming' => Media::query()
+                ->where('status', AnimeLabels::status('NOT_YET_RELEASED'))
+                ->where('start_year', '>=', now()->year)
+                ->oldest('start_date')
+                ->limit(5)
+                ->get(),
+            'topAnime' => Media::query()->where('type', 'anime')->latest('average_score')->limit(5)->get(),
+            'topManga' => Media::query()->where('type', 'manga')->latest('average_score')->limit(5)->get(),
             'genres' => AnimeLabels::GENRES,
             'formats' => AnimeLabels::FORMATS,
             'seasons' => AnimeLabels::SEASONS,
@@ -33,17 +46,7 @@ class HomeController extends Controller
         $season = $request->string('season')->value();
         $format = $request->string('format')->value();
 
-        $items = Media::query()
-            ->when(in_array($type, ['anime', 'manga'], true), fn ($builder) => $builder->where('type', $type))
-            ->when($genre, fn ($builder) => $builder->where('genres', 'like', "%{$genre}%"))
-            ->when($year, fn ($builder) => $builder->where('start_year', (int) $year))
-            ->when($season, fn ($builder) => $builder->where('season', $season))
-            ->when($format, fn ($builder) => $builder->where('format', $format))
-            ->when($query, fn ($builder) => $builder->where(function ($inner) use ($query): void {
-                $inner->where('title', 'like', "%{$query}%")
-                    ->orWhere('title_english', 'like', "%{$query}%")
-                    ->orWhere('title_native', 'like', "%{$query}%");
-            }))
+        $items = $this->searchQuery($request)
             ->latest('popularity')
             ->paginate(24)
             ->withQueryString();
@@ -66,6 +69,34 @@ class HomeController extends Controller
                 'canonical' => route('search'),
             ]),
         ]);
+    }
+
+    public function autocomplete(Request $request)
+    {
+        $query = trim($request->string('q')->value());
+
+        if (mb_strlen($query) < 1) {
+            return response()->json([]);
+        }
+
+        $items = Media::query()
+            ->where(function ($inner) use ($query): void {
+                $inner->where('title', 'like', "{$query}%")
+                    ->orWhere('title', 'like', "%{$query}%")
+                    ->orWhere('title_english', 'like', "%{$query}%")
+                    ->orWhere('title_native', 'like', "%{$query}%");
+            })
+            ->latest('popularity')
+            ->limit(8)
+            ->get()
+            ->map(fn (Media $media): array => [
+                'title' => $media->title,
+                'type' => $media->type,
+                'cover_image' => $media->cover_image,
+                'url' => route('media.show', ['type' => $media->type, 'media' => $media]),
+            ]);
+
+        return response()->json($items);
     }
 
     public function show(string $type, Media $media, Settings $settings)
@@ -99,5 +130,27 @@ class HomeController extends Controller
                 ->limit(8)
                 ->get(),
         ]);
+    }
+
+    private function searchQuery(Request $request)
+    {
+        $type = $request->string('type')->value();
+        $query = $request->string('q')->value();
+        $genre = $request->string('genre')->value();
+        $year = $request->string('year')->value();
+        $season = $request->string('season')->value();
+        $format = $request->string('format')->value();
+
+        return Media::query()
+            ->when(in_array($type, ['anime', 'manga'], true), fn ($builder) => $builder->where('type', $type))
+            ->when($genre, fn ($builder) => $builder->where('genres', 'like', "%{$genre}%"))
+            ->when($year, fn ($builder) => $builder->where('start_year', (int) $year))
+            ->when($season, fn ($builder) => $builder->where('season', $season))
+            ->when($format, fn ($builder) => $builder->where('format', $format))
+            ->when($query, fn ($builder) => $builder->where(function ($inner) use ($query): void {
+                $inner->where('title', 'like', "%{$query}%")
+                    ->orWhere('title_english', 'like', "%{$query}%")
+                    ->orWhere('title_native', 'like', "%{$query}%");
+            }));
     }
 }
