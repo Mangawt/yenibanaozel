@@ -6,8 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class ImportQueue extends Model
 {
-    public const STATUS_WAITING = 'waiting';
-    public const STATUS_PROCESSING = 'processing';
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_RUNNING = 'running';
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_SKIPPED = 'skipped';
     public const STATUS_FAILED = 'failed';
@@ -21,6 +21,7 @@ class ImportQueue extends Model
         'status',
         'attempts',
         'error_message',
+        'batch_id',
     ];
 
     protected $casts = [

@@ -35,9 +35,9 @@ Route::prefix('adminasip')->name('admin.')->group(function (): void {
         Route::post('/import', [AdminController::class, 'import'])->name('import');
         Route::post('/bulk-import', [AdminController::class, 'bulkImport'])->name('bulk-import');
         Route::get('/import-queue', [AdminController::class, 'queue'])->name('import-queue');
+        Route::get('/import-queue/stats', [AdminController::class, 'queueStats'])->name('import-queue.stats');
         Route::post('/import-queue/preview', [AdminController::class, 'previewQueue'])->name('import-queue.preview');
         Route::post('/import-queue/enqueue', [AdminController::class, 'enqueueQueue'])->name('import-queue.enqueue');
-        Route::post('/import-queue/process', [AdminController::class, 'processQueue'])->name('import-queue.process');
         Route::post('/import-queue/{queueItem}/retry', [AdminController::class, 'retryQueue'])->name('import-queue.retry');
         Route::get('/ayarlar', [AdminController::class, 'settings'])->name('settings');
         Route::post('/ayarlar', [AdminController::class, 'saveSettings'])->name('settings.save');

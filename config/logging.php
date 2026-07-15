@@ -65,6 +65,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'import' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/import.log'),
+            'level' => env('IMPORT_LOG_LEVEL', 'info'),
+            'days' => 14,
+            'replace_placeholders' => true,
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

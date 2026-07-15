@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Exceptions\AniListRateLimitedException;
 use App\Models\Media;
 use App\Support\AnimeLabels;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -21,7 +23,7 @@ class ExternalMediaService
     public function search(string $source, string $type, string $query, int $limit = 10): array
     {
         if ($source !== 'anilist') {
-            throw new \InvalidArgumentException('Bu kaynak henüz desteklenmiyor.');
+            throw new \InvalidArgumentException('Bu kaynak henÃ¼z desteklenmiyor.');
         }
 
         return $this->searchAniList($type, $query, $limit);
@@ -39,11 +41,11 @@ class ExternalMediaService
         }
 
         if ($source !== 'anilist') {
-            throw new \InvalidArgumentException('Bu kaynak henüz desteklenmiyor.');
+            throw new \InvalidArgumentException('Bu kaynak henÃ¼z desteklenmiyor.');
         }
 
         $payload = $this->fetchAniListDetails($type, $id);
-        $title = $payload['title'] ?: 'Başlıksız';
+        $title = $payload['title'] ?: 'BaÅŸlÄ±ksÄ±z';
         $descriptionOriginal = $payload['description'] ?? null;
 
         return Media::query()->updateOrCreate(
@@ -107,7 +109,7 @@ class ExternalMediaService
         $type = $options['type'] ?? 'anime';
 
         if ($source !== 'anilist') {
-            throw new \InvalidArgumentException('Bu kaynak henüz desteklenmiyor.');
+            throw new \InvalidArgumentException('Bu kaynak henÃ¼z desteklenmiyor.');
         }
 
         $perPage = min(max((int) ($options['per_page'] ?? 50), 1), 50);
@@ -433,13 +435,20 @@ class ExternalMediaService
             'variables' => $variables,
         ]);
 
+        if ($response->status() === 429) {
+            Log::channel('import')->warning('AniList 429 alındı.', [
+                'retry_after' => (int) ($response->header('Retry-After') ?: 60),
+            ]);
+
+            throw new AniListRateLimitedException((int) ($response->header('Retry-After') ?: 60));
+        }
+
         if ($response->failed() || filled($response->json('errors'))) {
             throw new \RuntimeException('Kaynak API yanıtı alınamadı.');
         }
 
         return $response->json('data', []);
     }
-
     private function cacheImage(?string $url, string $folder): ?string
     {
         if (blank($url)) {
@@ -483,7 +492,7 @@ class ExternalMediaService
     {
         return match ($role) {
             'MAIN' => 'Ana karakter',
-            'SUPPORTING' => 'Yardımcı karakter',
+            'SUPPORTING' => 'YardÄ±mcÄ± karakter',
             'BACKGROUND' => 'Arka plan',
             default => $role,
         };
@@ -503,3 +512,4 @@ class ExternalMediaService
         ]);
     }
 }
+

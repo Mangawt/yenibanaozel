@@ -23,6 +23,8 @@ body{margin:0;background:radial-gradient(circle at 16% -10%,rgba(103,232,201,.14
 a{color:inherit;text-decoration:none}
 img{display:block;max-width:100%}
 input,select,textarea,button{font:inherit}
+select{color-scheme:dark}
+select option{background:#101621;color:#f4f7fb}
 
 .site-header{position:sticky;top:0;z-index:40;border-bottom:1px solid var(--border);background:rgba(9,11,16,.76);backdrop-filter:blur(16px)}
 .site-header{display:flex;height:64px;align-items:center;gap:16px;padding:0 max(16px,calc((100vw - 1280px)/2 + 24px))}
@@ -237,8 +239,9 @@ nav a:hover{background:var(--secondary);color:var(--foreground)}
 }
 
 .section-title a{color:var(--primary);font-size:13px;font-weight:800}
-.home-five{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.home-five{grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
 .home-five .media-card{width:auto;min-width:0}
+.home-five .media-card-body strong{font-size:13px}
 .home-slider{position:relative;overflow:hidden;border:1px solid var(--border);border-radius:18px;min-height:360px;margin-bottom:28px;background:var(--card);box-shadow:var(--shadow)}
 .slide{position:absolute;inset:0;display:flex;align-items:end;padding:28px;background:var(--hero),var(--secondary);background-size:cover;background-position:center;opacity:0;animation:sliderFade 25s infinite}
 .slide:nth-child(1){animation-delay:0s}
@@ -276,6 +279,8 @@ nav a:hover{background:var(--secondary);color:var(--foreground)}
 .metric-grid strong{display:block;margin-top:6px;font-size:28px}
 .metric-grid.compact strong{font-size:22px}
 .queue-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end}
+.queue-form textarea{grid-column:1/-1;min-height:96px}
+.queue-live{border:1px solid rgba(103,232,201,.36);border-radius:999px;background:rgba(103,232,201,.12);padding:9px 13px;color:var(--primary);font-size:13px;font-weight:900}
 .queue-table{display:grid;gap:10px}
 .queue-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.025);padding:12px}
 .queue-row p,.queue-row small{display:block;margin:4px 0 0;color:var(--muted-foreground)}
@@ -303,7 +308,7 @@ nav a:hover{background:var(--secondary);color:var(--foreground)}
 .page nav[role="navigation"] a,.page nav[role="navigation"] span{border:1px solid var(--border);border-radius:8px;background:var(--card);padding:8px 11px;color:var(--foreground)}
 
 @media (min-width:640px){
-  .home-five{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .home-five{grid-template-columns:repeat(6,minmax(0,1fr))}
 }
 
 @media (max-width:720px){

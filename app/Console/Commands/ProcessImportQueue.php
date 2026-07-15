@@ -7,15 +7,15 @@ use Illuminate\Console\Command;
 
 class ProcessImportQueue extends Command
 {
-    protected $signature = 'nozume:import-queue {--limit=1 : Bu çalıştırmada işlenecek kayıt sayısı}';
+    protected $signature = 'nozume:import-queue';
 
-    protected $description = 'Import kuyruğundaki içerikleri sırayla içe aktarır.';
+    protected $description = 'Pending import kayıtları için Laravel queue joblarını oluşturur.';
 
     public function handle(ImportQueueService $queue): int
     {
-        $result = $queue->process(max(1, (int) $this->option('limit')));
+        $count = $queue->dispatchPending();
 
-        $this->info("İşlenen: {$result['processed']} | Tamamlanan: {$result['completed']} | Atlanan: {$result['skipped']} | Hatalı: {$result['failed']}");
+        $this->info("Dispatch edilen pending kayıt: {$count}");
 
         return self::SUCCESS;
     }

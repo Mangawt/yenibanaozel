@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class TranslationService
@@ -21,13 +22,20 @@ class TranslationService
 
         $provider = $this->settings->get('translation_provider', 'deepl');
 
-        return match ($provider) {
+        $translated = match ($provider) {
             'deepl' => $this->translateWithDeepL($text),
             'google' => $this->translateWithGoogle($text),
             'gemini' => $this->translateWithGemini($text),
             'none' => $text,
             default => $this->translateWithPublicGoogle($text),
         };
+
+        Log::channel('import')->info('Çeviri tamamlandı.', [
+            'provider' => $provider,
+            'length' => mb_strlen($text),
+        ]);
+
+        return $translated;
     }
 
     private function translateWithDeepL(string $text): string

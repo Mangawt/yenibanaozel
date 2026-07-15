@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('source', 32);
             $table->string('type', 16);
             $table->unsignedBigInteger('external_id');
-            $table->string('status', 24)->default('waiting');
+            $table->string('status', 24)->default('pending');
             $table->unsignedTinyInteger('attempts')->default(0);
             $table->text('error_message')->nullable();
             $table->timestamps();

@@ -111,6 +111,11 @@ class AdminController extends Controller
         ]);
     }
 
+    public function queueStats(ImportQueueService $queue)
+    {
+        return response()->json($queue->stats());
+    }
+
     public function previewQueue(Request $request, ImportQueueService $queue): RedirectResponse
     {
         $validated = $this->queueValidation($request);
@@ -133,18 +138,13 @@ class AdminController extends Controller
 
         return redirect()
             ->route('admin.import-queue')
-            ->with('status', "{$result['created']} kayıt kuyruğa eklendi, {$result['skipped']} kayıt atlandı.");
-    }
-
-    public function processQueue(ImportQueueService $queue): RedirectResponse
-    {
-        $result = $queue->process(1);
-
-        return back()->with('status', "İşlenen: {$result['processed']} · Tamamlanan: {$result['completed']} · Atlanan: {$result['skipped']} · Hatalı: {$result['failed']}");
+            ->with('status', "{$result['created']} kayıt kuyruğa eklendi, {$result['completed_existing']} kayıt zaten sitede olduğu için tamamlandı, {$result['skipped']} kayıt atlandı. Batch: ".($result['batch_id'] ?? '-'));
     }
 
     public function retryQueue(ImportQueue $queueItem, ImportQueueService $queue): RedirectResponse
     {
+        abort_unless($queueItem->status === ImportQueue::STATUS_FAILED, 404);
+
         $queue->retry($queueItem);
 
         return back()->with('status', 'Kayıt tekrar kuyruğa alındı.');
@@ -216,6 +216,7 @@ class AdminController extends Controller
             'year' => ['nullable', 'integer', 'min:1940', 'max:2100'],
             'season' => ['nullable', 'in:WINTER,SPRING,SUMMER,FALL'],
             'format' => ['nullable', 'string', 'max:40'],
+            'links' => ['nullable', 'string', 'max:20000'],
         ]);
     }
 }
