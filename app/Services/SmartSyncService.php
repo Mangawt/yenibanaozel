@@ -118,14 +118,14 @@ class SmartSyncService
             }
 
             $page = max(1, (int) $state->current_page);
-            $options = $filters + [
+            $options = array_merge($filters, [
                 'source' => 'anilist',
                 'type' => $state->type,
                 'page' => $page,
                 'pages' => 1,
                 'per_page' => min(max((int) ($filters['per_page'] ?? 50), 1), 50),
                 'sort' => $filters['sort'] ?? 'POPULARITY_DESC',
-            ];
+            ]);
 
             $ids = $this->external->discoverIds($options);
             $result = in_array($state->mode, ['full', 'updates'], true)

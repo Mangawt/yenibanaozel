@@ -123,16 +123,33 @@ class ExternalMediaService
         $ids = [];
 
         for ($page = $startPage; $page < $startPage + $pages; $page++) {
-            $data = $this->aniListGraphql($this->discoveryQuery(), [
+            $variables = [
                 'type' => $type === 'manga' ? 'MANGA' : 'ANIME',
                 'perPage' => $perPage,
                 'page' => $page,
-                'genre' => filled($options['genre'] ?? null) ? $this->toAniListGenre($options['genre']) : null,
-                'seasonYear' => filled($options['year'] ?? null) ? (int) $options['year'] : null,
-                'season' => filled($options['season'] ?? null) ? $options['season'] : null,
-                'format' => filled($options['format'] ?? null) ? $options['format'] : null,
                 'sort' => [$sort],
-            ]);
+            ];
+
+            if (filled($options['genre'] ?? null)) {
+                $variables['genre'] = $this->toAniListGenre($options['genre']);
+            }
+
+            if (filled($options['year'] ?? null)) {
+                $variables['seasonYear'] = (int) $options['year'];
+            }
+
+            if (filled($options['season'] ?? null)) {
+                $variables['season'] = $options['season'];
+            }
+
+            if (filled($options['format'] ?? null)) {
+                $variables['format'] = $options['format'];
+            }
+
+            $data = $this->aniListGraphql(
+                $this->discoveryQuery(),
+                $variables,
+            );
 
             foreach ($data['Page']['media'] ?? [] as $item) {
                 if (! empty($item['id'])) {
