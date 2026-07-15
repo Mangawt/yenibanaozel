@@ -82,38 +82,26 @@
     @yield('content')
 </main>
 
-<footer class="site-footer">
-    <div class="footer-grid compact-footer">
-        <div>
+<footer class="site-footer minimal-footer">
+    <div class="footer-main">
+        <div class="footer-brand">
             <strong>{{ $settings['site_name'] ?? 'nozu.me' }}</strong>
             <p>{{ $settings['site_description'] ?? 'Türk kullanıcılar için hazırlanmış anime ve manga keşif veritabanı.' }}</p>
-            <p class="footer-note">Nozu.me tanıtım, keşif ve kataloglama amacıyla çalışır; anime bölümü, manga bölümü veya korsan yayın dosyası barındırmaz.</p>
         </div>
-        <div>
-            <h3>Keşfet</h3>
-            <a href="{{ route('search', ['type' => 'anime']) }}">Anime arşivi</a>
-            <a href="{{ route('search', ['type' => 'manga']) }}">Manga arşivi</a>
+        <nav class="footer-links" aria-label="Alt menü">
+            <a href="{{ route('search', ['type' => 'anime']) }}">Anime</a>
+            <a href="{{ route('search', ['type' => 'manga']) }}">Manga</a>
             <a href="{{ route('people.index') }}">Kişiler</a>
             <a href="{{ route('studios.index') }}">Stüdyolar</a>
-        </div>
-        <div>
-            <h3>Platform</h3>
-            <a href="{{ route('api.docs') }}">API Dokümantasyonu</a>
+            <a href="{{ route('api.docs') }}">API</a>
             <a href="{{ route('about') }}">Hakkımızda</a>
-            <a href="{{ route('privacy') }}">Gizlilik Politikası</a>
-            <a href="{{ route('terms') }}">Kullanım Şartları</a>
-        </div>
-        <div>
-            <h3>Yasal</h3>
-            <a href="{{ route('cookies') }}">Çerez Politikası</a>
-            <a href="{{ route('cookie-preferences') }}">Çerez Tercihleri</a>
-            <a href="{{ route('copyright') }}">Telif ve İçerik Kaldırma</a>
-            <a href="{{ route('disclaimer') }}">Sorumluluk Reddi</a>
+            <a href="{{ route('privacy') }}">Gizlilik</a>
+            <a href="{{ route('terms') }}">Şartlar</a>
             <a href="{{ route('contact') }}">İletişim</a>
-        </div>
+        </nav>
     </div>
     <div class="footer-bottom">
-        <span>Veri ve katalog altyapısı Nozu.me tarafından sağlanır.</span>
+        <span>Tanıtım, keşif ve kataloglama amacıyla hazırlanmıştır.</span>
         <span>© {{ date('Y') }} nozu.me</span>
     </div>
 </footer>
