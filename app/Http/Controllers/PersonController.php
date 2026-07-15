@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Media;
+use App\Models\Person;
 use App\Services\Settings;
 use App\Support\Seo;
 use Illuminate\Support\Str;
@@ -10,6 +11,82 @@ use Illuminate\Support\Str;
 class PersonController extends Controller
 {
     public function index(Settings $settings)
+    {
+        $people = Person::query()
+            ->where('credits_count', '>', 0)
+            ->orderBy('name')
+            ->paginate(72)
+            ->withQueryString();
+
+        if ($people->total() === 0) {
+            $fallback = $this->legacyPeople();
+
+            return view('people.index', [
+                'settings' => $settings->allPublic(),
+                'people' => $fallback,
+                'seo' => Seo::defaults(['title' => 'Sanatçılar - nozu.me']),
+            ]);
+        }
+
+        return view('people.index', [
+            'settings' => $settings->allPublic(),
+            'people' => $people,
+            'seo' => Seo::defaults(['title' => 'Sanatçılar - nozu.me']),
+        ]);
+    }
+
+    public function show(string $slug, Settings $settings)
+    {
+        $person = Person::query()->where('slug', $slug)->first();
+
+        if (! $person) {
+            return $this->legacyShow($slug, $settings);
+        }
+
+        $staffCredits = $person->media()
+            ->withPivot(['kind', 'role', 'language'])
+            ->latest('media.popularity')
+            ->get()
+            ->map(fn (Media $media): array => [
+                'kind' => $media->pivot->kind === 'voice' ? 'Seslendirme' : 'Ekip',
+                'role' => $media->pivot->role,
+                'image' => null,
+                'media' => $media,
+            ]);
+
+        $voiceCredits = $person->voicedCharacters()
+            ->with(['media', 'character'])
+            ->get()
+            ->map(fn ($link): array => [
+                'kind' => 'Seslendirme',
+                'role' => $link->character?->name,
+                'image' => $link->character?->image,
+                'media' => $link->media,
+            ]);
+
+        $credits = $staffCredits
+            ->merge($voiceCredits)
+            ->filter(fn (array $credit): bool => $credit['media'] instanceof Media)
+            ->unique(fn (array $credit): string => $credit['kind'].'-'.$credit['role'].'-'.$credit['media']->id)
+            ->sortByDesc(fn (array $credit): int => (int) ($credit['media']->popularity ?? 0))
+            ->values();
+
+        abort_if($credits->isEmpty(), 404);
+
+        $personData = [
+            'name' => $person->name,
+            'image' => $person->image,
+        ];
+
+        return view('people.show', [
+            'settings' => $settings->allPublic(),
+            'person' => $personData,
+            'credits' => $credits,
+            'seo' => Seo::person($personData),
+        ]);
+    }
+
+    private function legacyPeople()
     {
         $people = [];
 
@@ -45,14 +122,10 @@ class PersonController extends Controller
             }
         }
 
-        return view('people.index', [
-            'settings' => $settings->allPublic(),
-            'people' => collect($people)->sortBy('name')->values(),
-            'seo' => Seo::defaults(['title' => 'Sanatçılar - nozu.me']),
-        ]);
+        return collect($people)->sortBy('name')->values();
     }
 
-    public function show(string $slug, Settings $settings)
+    private function legacyShow(string $slug, Settings $settings)
     {
         $credits = [];
         $person = [
@@ -84,7 +157,7 @@ class PersonController extends Controller
                 $person['name'] = $staff['name'];
                 $person['image'] ??= $staff['image'] ?? null;
                 $credits[] = [
-                    'kind' => 'Staff',
+                    'kind' => 'Ekip',
                     'role' => $staff['role'] ?? null,
                     'image' => $staff['image'] ?? null,
                     'media' => $media,

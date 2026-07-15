@@ -23,27 +23,34 @@ class ImportQueueService
 
     public function preview(array $options): array
     {
-        $ids = $this->idsFromOptions($options);
+        $entries = $this->entriesFromOptions($options);
 
-        $existingMedia = $ids->filter(fn (int $id): bool => $this->mediaExists(
-            $options['source'] ?? 'anilist',
-            $options['type'] ?? 'anime',
-            $id,
+        $existingMedia = $entries->filter(fn (array $entry): bool => $this->mediaExists(
+            $entry['source'],
+            $entry['type'],
+            $entry['id'],
         ));
 
-        $existingQueue = $ids->diff($existingMedia)->filter(fn (int $id): bool => $this->queueExists(
-            $options['source'] ?? 'anilist',
-            $options['type'] ?? 'anime',
-            $id,
+        $existingQueue = $entries->reject(fn (array $entry): bool => $existingMedia->contains(fn (array $existing): bool => $this->sameEntry($existing, $entry)))
+            ->filter(fn (array $entry): bool => $this->queueExists(
+                $entry['source'],
+                $entry['type'],
+                $entry['id'],
         ));
+        $new = $entries
+            ->reject(fn (array $entry): bool => $existingMedia->contains(fn (array $existing): bool => $this->sameEntry($existing, $entry)))
+            ->reject(fn (array $entry): bool => $existingQueue->contains(fn (array $existing): bool => $this->sameEntry($existing, $entry)));
 
         return [
             'options' => $options,
-            'ids' => $ids->all(),
-            'found' => $ids->count(),
+            'ids' => $entries->pluck('id')->all(),
+            'entries' => $entries->all(),
+            'found' => $entries->count(),
+            'anime' => $entries->where('type', 'anime')->count(),
+            'manga' => $entries->where('type', 'manga')->count(),
             'existing_media' => $existingMedia->count(),
             'existing_queue' => $existingQueue->count(),
-            'new' => $ids->diff($existingMedia)->diff($existingQueue)->count(),
+            'new' => $new->count(),
         ];
     }
 
@@ -51,7 +58,9 @@ class ImportQueueService
     {
         $source = $options['source'] ?? 'anilist';
         $type = $options['type'] ?? 'anime';
-        $ids = collect($ids ?: $this->idsFromOptions($options))->unique()->values();
+        $entries = $ids
+            ? $this->normalizeEntries($ids, $source, $type)
+            : $this->entriesFromOptions($options);
 
         $created = 0;
         $completedExisting = 0;
@@ -59,17 +68,19 @@ class ImportQueueService
         $jobs = [];
         $queueItemIds = [];
 
-        DB::transaction(function () use ($ids, $source, $type, &$created, &$completedExisting, &$skipped, &$jobs, &$queueItemIds): void {
-        foreach ($ids as $id) {
-            $id = (int) $id;
+        DB::transaction(function () use ($entries, &$created, &$completedExisting, &$skipped, &$jobs, &$queueItemIds): void {
+        foreach ($entries as $entry) {
+            $source = $entry['source'];
+            $type = $entry['type'];
+            $id = (int) $entry['id'];
 
             if ($this->mediaExists($source, $type, $id)) {
                 try {
                     ImportQueue::query()->firstOrCreate(
                         ['source' => $source, 'type' => $type, 'external_id' => $id],
-                        ['status' => ImportQueue::STATUS_COMPLETED, 'attempts' => 0],
+                        ['status' => ImportQueue::STATUS_SKIPPED, 'attempts' => 0],
                     );
-                    $completedExisting++;
+                    $skipped++;
                 } catch (QueryException) {
                     $skipped++;
                 }
@@ -130,7 +141,92 @@ class ImportQueueService
             'created' => $created,
             'completed_existing' => $completedExisting,
             'skipped' => $skipped,
-            'total' => $ids->count(),
+            'total' => $entries->count(),
+            'batch_id' => $batchId,
+        ];
+    }
+
+    public function enqueueRefresh(array $options, array $ids): array
+    {
+        $source = $options['source'] ?? 'anilist';
+        $type = $options['type'] ?? 'anime';
+        $entries = $this->normalizeEntries($ids, $source, $type);
+        $created = 0;
+        $refreshing = 0;
+        $skipped = 0;
+        $jobs = [];
+        $queueItemIds = [];
+
+        DB::transaction(function () use ($entries, &$created, &$refreshing, &$skipped, &$jobs, &$queueItemIds): void {
+            foreach ($entries as $entry) {
+                $source = $entry['source'];
+                $type = $entry['type'];
+                $id = (int) $entry['id'];
+
+                if ($this->queueExists($source, $type, $id)) {
+                    $skipped++;
+                    continue;
+                }
+
+                $exists = $this->mediaExists($source, $type, $id);
+
+                try {
+                    $item = ImportQueue::query()->updateOrCreate(
+                        ['source' => $source, 'type' => $type, 'external_id' => $id],
+                        [
+                            'status' => ImportQueue::STATUS_PENDING,
+                            'attempts' => 0,
+                            'error_message' => null,
+                            'batch_id' => null,
+                            'force_refresh' => $exists,
+                        ],
+                    );
+
+                    $queueItemIds[] = $item->id;
+                    $jobs[] = (new ImportQueueJob($item->id))->delay(now()->addSeconds(count($jobs) * 2));
+                    $exists ? $refreshing++ : $created++;
+
+                    Log::channel('import')->info($exists ? 'Refresh queue item oluşturuldu.' : 'Queue item oluşturuldu.', [
+                        'queue_item_id' => $item->id,
+                        'source' => $source,
+                        'type' => $type,
+                        'external_id' => $id,
+                        'force_refresh' => $exists,
+                    ]);
+                } catch (QueryException) {
+                    $skipped++;
+                }
+            }
+        });
+
+        $batchId = null;
+
+        if ($jobs !== []) {
+            $batch = Bus::batch($jobs)
+                ->name("nozu.me refresh {$source}/{$type} ".now()->format('Y-m-d H:i:s'))
+                ->onConnection('database')
+                ->onQueue('imports')
+                ->allowFailures()
+                ->dispatch();
+
+            $batchId = $batch->id;
+
+            ImportQueue::query()
+                ->whereIn('id', $queueItemIds)
+                ->update(['batch_id' => $batchId]);
+
+            Log::channel('import')->info('Refresh batch oluşturuldu.', [
+                'batch_id' => $batchId,
+                'jobs' => count($jobs),
+            ]);
+        }
+
+        return [
+            'created' => $created,
+            'refreshing' => $refreshing,
+            'completed_existing' => 0,
+            'skipped' => $skipped,
+            'total' => $entries->count(),
             'batch_id' => $batchId,
         ];
     }
@@ -203,6 +299,32 @@ class ImportQueueService
         ]);
     }
 
+    public function retryFailed(): int
+    {
+        $count = 0;
+
+        ImportQueue::query()
+            ->where('status', ImportQueue::STATUS_FAILED)
+            ->orderBy('id')
+            ->chunkById(100, function ($items) use (&$count): void {
+                foreach ($items as $item) {
+                    $this->retry($item);
+                    $count++;
+                }
+            });
+
+        return $count;
+    }
+
+    public function clearStatus(string $status): int
+    {
+        abort_if($status === ImportQueue::STATUS_RUNNING, 422, 'Running kayitlar guvenli sekilde dogrudan silinemez.');
+
+        return DB::transaction(fn (): int => ImportQueue::query()
+            ->where('status', $status)
+            ->delete());
+    }
+
     public function stats(): array
     {
         $counts = ImportQueue::query()
@@ -252,32 +374,82 @@ class ImportQueueService
         ];
     }
 
-    private function idsFromOptions(array $options)
+    private function entriesFromOptions(array $options)
     {
-        $manualIds = $this->parseIds($options['links'] ?? '');
+        $manualEntries = $this->parseEntries($options['links'] ?? '', $options);
 
-        if ($manualIds !== []) {
-            return collect($manualIds)->unique()->values();
+        if ($manualEntries !== []) {
+            return $this->normalizeEntries($manualEntries, $options['source'] ?? 'anilist', $options['type'] ?? 'anime');
         }
 
-        return collect($this->external->discoverIds($options))->unique()->values();
+        return $this->normalizeEntries($this->external->discoverIds($options), $options['source'] ?? 'anilist', $options['type'] ?? 'anime');
     }
 
-    private function parseIds(?string $text): array
+    private function parseEntries(?string $text, array $options): array
     {
         if (blank($text)) {
             return [];
         }
 
-        preg_match_all('~(?:anilist\.co/(?:anime|manga)/|^|\D)(\d{2,})~i', $text, $matches);
+        $entries = [];
+        $fallbackType = $options['type'] ?? 'anime';
+        $source = $options['source'] ?? 'anilist';
 
-        return collect($matches[1] ?? [])->map(fn ($id): int => (int) $id)->filter()->values()->all();
+        foreach (preg_split('/\R+/', trim($text)) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '') {
+                continue;
+            }
+
+            if (preg_match('~anilist\.co/(anime|manga)/(\d{1,10})(?:/[^\\s]*)?~i', $line, $match)) {
+                $entries[] = [
+                    'source' => $source,
+                    'type' => strtolower($match[1]),
+                    'id' => (int) $match[2],
+                ];
+
+                continue;
+            }
+
+            if (preg_match('~^\d{1,10}$~', $line)) {
+                $entries[] = [
+                    'source' => $source,
+                    'type' => $fallbackType,
+                    'id' => (int) $line,
+                ];
+            }
+        }
+
+        return $entries;
+    }
+
+    private function normalizeEntries(array|\Illuminate\Support\Collection $items, string $source, string $type): \Illuminate\Support\Collection
+    {
+        return collect($items)
+            ->map(fn ($item): array => is_array($item)
+                ? [
+                    'source' => $item['source'] ?? $source,
+                    'type' => in_array($item['type'] ?? $type, ['anime', 'manga'], true) ? $item['type'] ?? $type : $type,
+                    'id' => (int) ($item['id'] ?? 0),
+                ]
+                : ['source' => $source, 'type' => $type, 'id' => (int) $item])
+            ->filter(fn (array $entry): bool => $entry['id'] > 0)
+            ->unique(fn (array $entry): string => "{$entry['source']}:{$entry['type']}:{$entry['id']}")
+            ->values();
+    }
+
+    private function sameEntry(array $a, array $b): bool
+    {
+        return $a['source'] === $b['source']
+            && $a['type'] === $b['type']
+            && (int) $a['id'] === (int) $b['id'];
     }
 
     private function averageSpeedPerMinute(): float
     {
         $first = ImportQueue::query()
-            ->whereIn('status', [ImportQueue::STATUS_COMPLETED, ImportQueue::STATUS_FAILED])
+            ->whereIn('status', [ImportQueue::STATUS_COMPLETED, ImportQueue::STATUS_FAILED, ImportQueue::STATUS_SKIPPED])
             ->oldest('updated_at')
             ->value('updated_at');
 
@@ -287,7 +459,7 @@ class ImportQueueService
 
         $minutes = max(1, now()->diffInMinutes($first));
         $processed = ImportQueue::query()
-            ->whereIn('status', [ImportQueue::STATUS_COMPLETED, ImportQueue::STATUS_FAILED])
+            ->whereIn('status', [ImportQueue::STATUS_COMPLETED, ImportQueue::STATUS_FAILED, ImportQueue::STATUS_SKIPPED])
             ->count();
 
         return round($processed / $minutes, 2);

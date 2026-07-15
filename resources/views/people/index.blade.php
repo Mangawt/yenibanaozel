@@ -9,17 +9,27 @@
 
     <section class="directory-grid">
         @foreach($people as $person)
-            <a class="directory-card" href="{{ route('people.show', $person['slug']) }}">
+            @php
+                $name = is_array($person) ? $person['name'] : $person->name;
+                $slug = is_array($person) ? $person['slug'] : $person->slug;
+                $image = is_array($person) ? ($person['image'] ?? null) : $person->image;
+                $count = is_array($person) ? $person['count'] : $person->credits_count;
+            @endphp
+            <a class="directory-card" href="{{ route('people.show', $slug) }}">
                 <span class="directory-avatar">
-                    @if($person['image'])
-                        <img src="{{ $person['image'] }}" alt="">
+                    @if($image)
+                        <img src="{{ $image }}" alt="">
                     @else
-                        {{ mb_substr($person['name'], 0, 1) }}
+                        {{ mb_substr($name, 0, 1) }}
                     @endif
                 </span>
-                <strong>{{ $person['name'] }}</strong>
-                <small>{{ $person['count'] }} çalışma</small>
+                <strong>{{ $name }}</strong>
+                <small>{{ $count }} çalışma</small>
             </a>
         @endforeach
     </section>
+
+    @if(method_exists($people, 'links'))
+        {{ $people->links() }}
+    @endif
 @endsection

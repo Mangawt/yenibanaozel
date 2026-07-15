@@ -13,6 +13,7 @@ class SeoController extends Controller
         $body = implode("\n", [
             'User-agent: *',
             'Allow: /',
+            'Disallow: /admin',
             'Disallow: /adminasip',
             'Sitemap: '.url('/sitemap.xml'),
             '',
@@ -30,6 +31,11 @@ class SeoController extends Controller
             ['loc' => route('api.docs'), 'priority' => '0.5', 'changefreq' => 'monthly'],
             ['loc' => route('about'), 'priority' => '0.4', 'changefreq' => 'monthly'],
             ['loc' => route('privacy'), 'priority' => '0.3', 'changefreq' => 'yearly'],
+            ['loc' => route('terms'), 'priority' => '0.3', 'changefreq' => 'yearly'],
+            ['loc' => route('cookies'), 'priority' => '0.3', 'changefreq' => 'yearly'],
+            ['loc' => route('copyright'), 'priority' => '0.3', 'changefreq' => 'yearly'],
+            ['loc' => route('disclaimer'), 'priority' => '0.3', 'changefreq' => 'yearly'],
+            ['loc' => route('contact'), 'priority' => '0.3', 'changefreq' => 'monthly'],
         ];
 
         $people = [];

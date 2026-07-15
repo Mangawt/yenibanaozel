@@ -23,32 +23,32 @@ class ExternalMediaService
     public function search(string $source, string $type, string $query, int $limit = 10): array
     {
         if ($source !== 'anilist') {
-            throw new \InvalidArgumentException('Bu kaynak henÃ¼z desteklenmiyor.');
+            throw new \InvalidArgumentException('Bu kaynak henüz desteklenmiyor.');
         }
 
         return $this->searchAniList($type, $query, $limit);
     }
 
-    public function import(string $source, string $type, int $id): Media
+    public function import(string $source, string $type, int $id, bool $forceRefresh = false): Media
     {
         $existing = Media::query()
             ->where('type', $type)
             ->where('source_ids', 'like', '%"'.$source.'":'.$id.'%')
             ->first();
 
-        if ($existing) {
+        if ($existing && ! $forceRefresh) {
             return $existing;
         }
 
         if ($source !== 'anilist') {
-            throw new \InvalidArgumentException('Bu kaynak henÃ¼z desteklenmiyor.');
+            throw new \InvalidArgumentException('Bu kaynak henüz desteklenmiyor.');
         }
 
         $payload = $this->fetchAniListDetails($type, $id);
-        $title = $payload['title'] ?: 'BaÅŸlÄ±ksÄ±z';
+        $title = $payload['title'] ?: 'Başlıksız';
         $descriptionOriginal = $payload['description'] ?? null;
 
-        return Media::query()->updateOrCreate(
+        $media = Media::query()->updateOrCreate(
             ['slug' => Media::makeSlug($title, $type, $id)],
             [
                 'type' => $type,
@@ -101,6 +101,10 @@ class ExternalMediaService
                 'is_adult' => $payload['is_adult'] ?? false,
             ],
         );
+
+        app(CatalogSyncService::class)->syncMedia($media);
+
+        return $media;
     }
 
     public function discoverIds(array $options): array
@@ -109,7 +113,7 @@ class ExternalMediaService
         $type = $options['type'] ?? 'anime';
 
         if ($source !== 'anilist') {
-            throw new \InvalidArgumentException('Bu kaynak henÃ¼z desteklenmiyor.');
+            throw new \InvalidArgumentException('Bu kaynak henüz desteklenmiyor.');
         }
 
         $perPage = min(max((int) ($options['per_page'] ?? 50), 1), 50);
@@ -444,6 +448,22 @@ class ExternalMediaService
         }
 
         if ($response->failed() || filled($response->json('errors'))) {
+            Log::channel('import')->error('AniList API response failed.', [
+                'http_status' => $response->status(),
+                'errors' => collect($response->json('errors', []))
+                    ->map(fn (array $error): array => [
+                        'message' => $error['message'] ?? null,
+                        'status' => $error['status'] ?? null,
+                    ])
+                    ->values()
+                    ->all(),
+                'variables' => [
+                    'id' => $variables['id'] ?? null,
+                    'type' => $variables['type'] ?? null,
+                    'page' => $variables['page'] ?? null,
+                    'perPage' => $variables['perPage'] ?? null,
+                ],
+            ]);
             throw new \RuntimeException('Kaynak API yanıtı alınamadı.');
         }
 
@@ -492,7 +512,7 @@ class ExternalMediaService
     {
         return match ($role) {
             'MAIN' => 'Ana karakter',
-            'SUPPORTING' => 'YardÄ±mcÄ± karakter',
+            'SUPPORTING' => 'Yardımcı karakter',
             'BACKGROUND' => 'Arka plan',
             default => $role,
         };

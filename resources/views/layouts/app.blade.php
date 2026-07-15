@@ -13,7 +13,7 @@
     @else
         <link rel="icon" href="{{ asset('favicon.ico') }}">
     @endif
-    <meta property="og:site_name" content="nozu.me">
+    <meta property="og:site_name" content="{{ $settings['site_name'] ?? 'nozu.me' }}">
     <meta property="og:title" content="{{ $seo['title'] }}">
     <meta property="og:description" content="{{ $seo['description'] }}">
     <meta property="og:type" content="{{ $seo['type'] }}">
@@ -23,31 +23,51 @@
     <meta name="twitter:title" content="{{ $seo['title'] }}">
     <meta name="twitter:description" content="{{ $seo['description'] }}">
     <meta name="twitter:image" content="{{ $seo['image'] }}">
+    <script>
+        const savedTheme = localStorage.getItem('nozu-theme') || '{{ auth()->user()->theme ?? 'system' }}';
+        document.documentElement.dataset.theme = savedTheme;
+    </script>
     <script type="application/ld+json">{!! json_encode($seo['schema'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) !!}</script>
     <link rel="stylesheet" href="{{ asset('style.css') }}">
 </head>
 <body>
-<header class="site-header">
-    <a class="brand" href="{{ route('home') }}">
+<header class="site-header modern-header">
+    <a class="brand" href="{{ route('home') }}" aria-label="{{ $settings['site_name'] ?? 'nozu.me' }}">
         @if(! empty($settings['logo_path']))
             <img src="{{ asset('storage/'.$settings['logo_path']) }}" alt="{{ $settings['site_name'] ?? 'nozu.me' }}">
         @else
             <span>N</span>
         @endif
-        <strong>{{ $settings['site_name'] ?? 'nozu.me' }}</strong>
     </a>
-    <nav>
-        <a href="{{ route('home') }}">Ana Sayfa</a>
+    <nav class="main-nav">
+        <a href="{{ route('home') }}">Keşfet</a>
         <a href="{{ route('search', ['type' => 'anime']) }}">Anime</a>
         <a href="{{ route('search', ['type' => 'manga']) }}">Manga</a>
-        <a href="{{ route('people.index') }}">Sanatçılar</a>
+        <a href="{{ route('people.index') }}">Karakterler</a>
         <a href="{{ route('studios.index') }}">Stüdyolar</a>
+        <a href="{{ route('people.index') }}">Kişiler</a>
         <a href="{{ route('api.docs') }}">API</a>
     </nav>
     <form class="quick-search autocomplete-wrap" action="{{ route('search') }}" method="get">
-        <input class="js-autocomplete" type="search" name="q" placeholder="Anime veya manga ara" autocomplete="off">
-        <button>Ara</button>
+        <input class="js-autocomplete" type="search" name="q" placeholder="Ara..." autocomplete="off">
+        <kbd>Ctrl K</kbd>
     </form>
+    <div class="header-actions">
+        <button class="theme-toggle" type="button" aria-label="Tema seçimi" title="Tema">
+            <span data-theme-icon>☾</span>
+        </button>
+        @auth
+            <a class="avatar-link" href="{{ route('profile.edit') }}">
+                @if(auth()->user()->avatar_path)
+                    <img src="{{ asset('storage/'.auth()->user()->avatar_path) }}" alt="{{ auth()->user()->name }}">
+                @else
+                    <span>{{ mb_substr(auth()->user()->name, 0, 1) }}</span>
+                @endif
+            </a>
+        @else
+            <a class="button ghost" href="{{ route('login') }}">Giriş</a>
+        @endauth
+    </div>
 </header>
 
 @if(session('status'))
@@ -67,27 +87,66 @@
         <div>
             <strong>{{ $settings['site_name'] ?? 'nozu.me' }}</strong>
             <p>{{ $settings['site_description'] ?? 'Türk kullanıcılar için hazırlanmış anime ve manga keşif veritabanı.' }}</p>
+            <p class="footer-note">Nozu.me tanıtım, keşif ve kataloglama amacıyla çalışır; anime bölümü, manga bölümü veya korsan yayın dosyası barındırmaz.</p>
         </div>
         <div>
             <h3>Keşfet</h3>
             <a href="{{ route('search', ['type' => 'anime']) }}">Anime arşivi</a>
             <a href="{{ route('search', ['type' => 'manga']) }}">Manga arşivi</a>
-            <a href="{{ route('people.index') }}">Sanatçılar</a>
+            <a href="{{ route('people.index') }}">Kişiler</a>
             <a href="{{ route('studios.index') }}">Stüdyolar</a>
         </div>
         <div>
-            <h3>nozu.me</h3>
-            <a href="{{ route('api.docs') }}">Geliştirici API</a>
+            <h3>Platform</h3>
+            <a href="{{ route('api.docs') }}">API Dokümantasyonu</a>
             <a href="{{ route('about') }}">Hakkımızda</a>
             <a href="{{ route('privacy') }}">Gizlilik Politikası</a>
+            <a href="{{ route('terms') }}">Kullanım Şartları</a>
+        </div>
+        <div>
+            <h3>Yasal</h3>
+            <a href="{{ route('cookies') }}">Çerez Politikası</a>
+            <a href="{{ route('cookie-preferences') }}">Çerez Tercihleri</a>
+            <a href="{{ route('copyright') }}">Telif ve İçerik Kaldırma</a>
+            <a href="{{ route('disclaimer') }}">Sorumluluk Reddi</a>
+            <a href="{{ route('contact') }}">İletişim</a>
         </div>
     </div>
     <div class="footer-bottom">
-        <span>AniList API ile beslenmektedir.</span>
+        <span>Veri ve katalog altyapısı Nozu.me tarafından sağlanır.</span>
         <span>© {{ date('Y') }} nozu.me</span>
     </div>
 </footer>
 <script>
+    const themeButton = document.querySelector('.theme-toggle');
+    const themeIcon = document.querySelector('[data-theme-icon]');
+    const themes = ['dark', 'light', 'system'];
+    const icons = {dark: '☾', light: '☀', system: '◐'};
+    const labels = {dark: 'Karanlık tema', light: 'Aydınlık tema', system: 'Sistem teması'};
+    const applyTheme = (theme) => {
+        document.documentElement.dataset.theme = theme;
+        localStorage.setItem('nozu-theme', theme);
+        if (themeIcon) themeIcon.textContent = icons[theme] || icons.system;
+        if (themeButton) {
+            themeButton.title = labels[theme] || labels.system;
+            themeButton.setAttribute('aria-label', labels[theme] || labels.system);
+        }
+    };
+    if (themeButton) {
+        applyTheme(localStorage.getItem('nozu-theme') || document.documentElement.dataset.theme || 'system');
+        themeButton.addEventListener('click', () => {
+            const current = document.documentElement.dataset.theme || 'system';
+            applyTheme(themes[(themes.indexOf(current) + 1) % themes.length]);
+        });
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            document.querySelector('.quick-search input')?.focus();
+        }
+    });
+
     document.querySelectorAll('.js-autocomplete').forEach((input) => {
         const wrap = input.closest('.autocomplete-wrap') || input.parentElement;
         const box = document.createElement('div');

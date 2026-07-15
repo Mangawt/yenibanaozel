@@ -12,4 +12,7 @@
             @include('components.media-card', ['item' => $item])
         @endforeach
     </div>
+    @if(method_exists($items, 'links'))
+        {{ $items->links() }}
+    @endif
 @endsection

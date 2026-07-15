@@ -10,26 +10,28 @@ use Illuminate\Http\Request;
 
 class HomeController extends Controller
 {
+    private const HOME_SECTION_LIMIT = 6;
+
     public function index(Settings $settings)
     {
         $currentSeason = AnimeLabels::season(now()->month <= 3 ? 'WINTER' : (now()->month <= 6 ? 'SPRING' : (now()->month <= 9 ? 'SUMMER' : 'FALL')));
         return view('home', [
             'settings' => $settings->allPublic(),
             'heroItems' => Media::query()->whereNotNull('banner_image')->latest('popularity')->limit(5)->get(),
-            'trending' => Media::query()->latest('popularity')->limit(5)->get(),
+            'trending' => Media::query()->latest('popularity')->limit(self::HOME_SECTION_LIMIT)->get(),
             'seasonPopular' => Media::query()
                 ->where('season', $currentSeason)
                 ->latest('average_score')
-                ->limit(5)
+                ->limit(self::HOME_SECTION_LIMIT)
                 ->get(),
             'upcoming' => Media::query()
                 ->where('status', AnimeLabels::status('NOT_YET_RELEASED'))
                 ->where('start_year', '>=', now()->year)
                 ->oldest('start_date')
-                ->limit(5)
+                ->limit(self::HOME_SECTION_LIMIT)
                 ->get(),
-            'topAnime' => Media::query()->where('type', 'anime')->latest('average_score')->limit(5)->get(),
-            'topManga' => Media::query()->where('type', 'manga')->latest('average_score')->limit(5)->get(),
+            'topAnime' => Media::query()->where('type', 'anime')->latest('average_score')->limit(self::HOME_SECTION_LIMIT)->get(),
+            'topManga' => Media::query()->where('type', 'manga')->latest('average_score')->limit(self::HOME_SECTION_LIMIT)->get(),
             'genres' => AnimeLabels::GENRES,
             'formats' => AnimeLabels::FORMATS,
             'seasons' => AnimeLabels::SEASONS,

@@ -22,10 +22,12 @@ class ImportQueue extends Model
         'attempts',
         'error_message',
         'batch_id',
+        'force_refresh',
     ];
 
     protected $casts = [
         'external_id' => 'integer',
         'attempts' => 'integer',
+        'force_refresh' => 'boolean',
     ];
 }

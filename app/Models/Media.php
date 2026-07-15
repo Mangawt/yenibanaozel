@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class Media extends Model
@@ -91,5 +93,31 @@ class Media extends Model
         $suffix = $sourceId ? "-{$sourceId}" : '';
 
         return "{$type}-{$base}{$suffix}";
+    }
+
+    public function people(): BelongsToMany
+    {
+        return $this->belongsToMany(Person::class, 'media_people')
+            ->withPivot(['kind', 'role', 'language'])
+            ->withTimestamps();
+    }
+
+    public function characterLinks(): HasMany
+    {
+        return $this->hasMany(MediaCharacter::class);
+    }
+
+    public function normalizedCharacters(): BelongsToMany
+    {
+        return $this->belongsToMany(Character::class, 'media_characters')
+            ->withPivot(['role', 'voice_actor_id', 'language'])
+            ->withTimestamps();
+    }
+
+    public function normalizedStudios(): BelongsToMany
+    {
+        return $this->belongsToMany(Studio::class, 'media_studios')
+            ->withPivot(['role'])
+            ->withTimestamps();
     }
 }

@@ -2,116 +2,287 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\ApiMediaResource;
 use App\Models\Media;
-use App\Services\ExternalMediaService;
+use App\Models\Person;
+use App\Models\Studio;
+use App\Services\ApiMediaService;
+use App\Support\ApiResponder;
+use App\Support\Seo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class ApiController extends Controller
 {
+    public function __construct(private readonly ApiMediaService $mediaService)
+    {
+    }
+
     public function docs()
     {
-        return view('api.docs');
+        $publicUrl = rtrim(config('nozu_openapi.public_url', 'https://nozu.me'), '/');
+
+        return view('api.docs', [
+            'seo' => Seo::defaults([
+                'title' => 'Nozu API v1 - Ücretsiz Anime ve Manga REST API',
+                'description' => 'Nozu API v1; anime ve manga verilerini ücretsiz, anahtarsız ve standart JSON response ile sunar.',
+                'canonical' => $publicUrl.'/api',
+                'image' => $publicUrl.'/icon.svg',
+                'schema' => [
+                    '@context' => 'https://schema.org',
+                    '@type' => 'WebAPI',
+                    'name' => 'Nozu API v1',
+                    'url' => $publicUrl.'/api',
+                    'documentation' => $publicUrl.'/api',
+                ],
+            ]),
+        ]);
+    }
+
+    public function openapi()
+    {
+        return response()->json(config('nozu_openapi'));
     }
 
     public function search(Request $request)
     {
-        $type = $request->string('type')->value();
-        $query = $request->string('q')->value();
+        $validated = $this->validateList($request);
+        $items = $this->mediaService
+            ->applySort($this->mediaService->query($request), $validated['sort'] ?? 'popularity')
+            ->paginate($validated['per_page'] ?? 24)
+            ->withQueryString();
+
+        return ApiResponder::paginated(
+            $items,
+            $items->getCollection()->map(fn (Media $media) => ApiMediaResource::make($media, $this->mediaService->fields($request), $this->mediaService->include($request))),
+            $request,
+        );
+    }
+
+    public function discover(Request $request)
+    {
+        return $this->search($request);
+    }
+
+    public function trending(Request $request)
+    {
+        $request->merge(['sort' => 'popularity_desc']);
+
+        return $this->search($request);
+    }
+
+    public function popular(Request $request)
+    {
+        $request->merge(['sort' => 'popular']);
+
+        return $this->search($request);
+    }
+
+    public function latest(Request $request)
+    {
+        $request->merge(['sort' => 'latest']);
+
+        return $this->search($request);
+    }
+
+    public function random(Request $request)
+    {
+        $media = Media::query()
+            ->when($request->filled('type'), fn ($query) => $query->where('type', $request->string('type')->value()))
+            ->inRandomOrder()
+            ->first();
+
+        abort_if(! $media, 404);
+
+        return ApiResponder::success(ApiMediaResource::make($media, $this->mediaService->fields($request), $this->mediaService->include($request), true), request: $request);
+    }
+
+    public function media(Request $request)
+    {
+        $request->validate(['ids' => ['required', 'string']]);
+        $ids = $this->mediaService->ids($request);
 
         $items = Media::query()
-            ->when(in_array($type, ['anime', 'manga'], true), fn ($builder) => $builder->where('type', $type))
-            ->when($query, fn ($builder) => $builder->where(function ($inner) use ($query): void {
-                $inner->where('title', 'like', "%{$query}%")
-                    ->orWhere('title_english', 'like', "%{$query}%")
-                    ->orWhere('title_native', 'like', "%{$query}%");
-            }))
-            ->latest('popularity')
-            ->paginate(min((int) $request->integer('per_page', 24), 50));
+            ->whereIn('id', $ids)
+            ->orWhere(function ($query) use ($ids): void {
+                foreach ($ids as $id) {
+                    $query->orWhere('source_ids', 'like', '%"anilist":'.$id.'%');
+                }
+            })
+            ->get()
+            ->unique('id')
+            ->values();
 
-        return response()->json($items->through(fn (Media $media) => $this->resource($media)));
+        return ApiResponder::success($items->map(fn (Media $media) => ApiMediaResource::make($media, $this->mediaService->fields($request), $this->mediaService->include($request), true))->values(), request: $request);
     }
 
-    public function bulkImport(Request $request, ExternalMediaService $external)
+    public function mediaBatch(Request $request)
     {
-        $validated = $request->validate([
-            'type' => ['required', 'in:anime,manga'],
-            'q' => ['nullable', 'string', 'max:120'],
-            'sort' => ['nullable', 'in:POPULARITY_DESC,TRENDING_DESC,SCORE_DESC,START_DATE_DESC'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:25'],
-            'page' => ['nullable', 'integer', 'min:1', 'max:50'],
-            'genre' => ['nullable', 'string', 'max:80'],
-            'year' => ['nullable', 'integer', 'min:1940', 'max:2100'],
-            'season' => ['nullable', 'in:WINTER,SPRING,SUMMER,FALL'],
-            'format' => ['nullable', 'string', 'max:40'],
-        ]);
+        $validated = $request->validate(['ids' => ['required', 'array', 'max:100'], 'ids.*' => ['integer']]);
+        $request->merge(['ids' => implode(',', $validated['ids'])]);
 
-        $result = $external->importBatch($validated + ['sort' => 'POPULARITY_DESC', 'per_page' => 10]);
-
-        return response()->json([
-            'message' => "{$result['count']} içerik içe aktarıldı.",
-            'data' => collect($result['items'])->map(fn (Media $media) => $this->resource($media))->values(),
-        ]);
+        return $this->media($request);
     }
 
-    public function show(string $type, Media $media)
+    public function autocomplete(Request $request)
+    {
+        $request->validate(['q' => ['required', 'string', 'max:80']]);
+
+        $items = Media::query()
+            ->where('title', 'like', $request->string('q')->value().'%')
+            ->orWhere('title_english', 'like', $request->string('q')->value().'%')
+            ->latest('popularity')
+            ->limit(10)
+            ->get()
+            ->map(fn (Media $media) => ApiMediaResource::make($media, ['id', 'type', 'slug', 'title', 'cover_image', 'url']));
+
+        return ApiResponder::success($items, request: $request);
+    }
+
+    public function recommendations(string $slug, Request $request)
+    {
+        $media = Media::query()->where('slug', $slug)->firstOrFail();
+        $ids = collect($media->recommendations ?? [])->pluck('id')->filter()->values();
+
+        $items = Media::query()
+            ->whereKeyNot($media->id)
+            ->when($ids->isNotEmpty(), fn ($query) => $query->where(function ($inner) use ($ids): void {
+                foreach ($ids as $id) {
+                    $inner->orWhere('source_ids', 'like', '%"anilist":'.$id.'%');
+                }
+            }))
+            ->latest('average_score')
+            ->limit((int) min($request->integer('limit', 12), 50))
+            ->get();
+
+        return ApiResponder::success($items->map(fn (Media $item) => ApiMediaResource::make($item, $this->mediaService->fields($request), $this->mediaService->include($request))), request: $request);
+    }
+
+    public function studios(Request $request)
+    {
+        return ApiResponder::success($this->mediaService->studios(), request: $request);
+    }
+
+    public function studio(string $slug, Request $request)
+    {
+        $studio = Studio::query()->where('slug', $slug)->first();
+        $items = $studio
+            ? $studio->media()->latest('media.popularity')->get()
+            : Media::query()->latest('popularity')->get()->filter(function (Media $media) use ($slug): bool {
+                return collect(array_merge($media->studios ?? [], $media->producers ?? []))->contains(fn (string $studio): bool => Str::slug($studio) === $slug);
+            })->values();
+
+        abort_if($items->isEmpty(), 404);
+
+        return ApiResponder::success([
+            'studio' => $studio ? [
+                'name' => $studio->name,
+                'slug' => $studio->slug,
+                'count' => $studio->media_count,
+                'sample' => $studio->image,
+            ] : $this->mediaService->studios()->firstWhere('slug', $slug),
+            'media' => $items->map(fn (Media $media) => ApiMediaResource::make($media, $this->mediaService->fields($request), $this->mediaService->include($request))),
+        ], request: $request);
+    }
+
+    public function people(Request $request)
+    {
+        return ApiResponder::success($this->mediaService->people(), request: $request);
+    }
+
+    public function person(string $slug, Request $request)
+    {
+        $personModel = Person::query()->where('slug', $slug)->first();
+
+        if ($personModel) {
+            $staffCredits = $personModel->media()
+                ->withPivot(['kind', 'role', 'language'])
+                ->latest('media.popularity')
+                ->get()
+                ->map(fn (Media $media): array => [
+                    'kind' => $media->pivot->kind === 'voice' ? 'Seslendirme' : 'Ekip',
+                    'role' => $media->pivot->role,
+                    'media' => ApiMediaResource::make($media, $this->mediaService->fields($request)),
+                ]);
+
+            $voiceCredits = $personModel->voicedCharacters()
+                ->with(['media', 'character'])
+                ->get()
+                ->map(fn ($link): array => [
+                    'kind' => 'Seslendirme',
+                    'role' => $link->character?->name,
+                    'media' => $link->media ? ApiMediaResource::make($link->media, $this->mediaService->fields($request)) : null,
+                ]);
+
+            $credits = $staffCredits
+                ->merge($voiceCredits)
+                ->filter(fn (array $credit): bool => filled($credit['media'] ?? null))
+                ->unique(fn (array $credit): string => $credit['kind'].'-'.$credit['role'].'-'.($credit['media']['id'] ?? ''))
+                ->values();
+
+            return ApiResponder::success([
+                'person' => [
+                    'name' => $personModel->name,
+                    'slug' => $personModel->slug,
+                    'image' => $personModel->image,
+                    'count' => $personModel->credits_count,
+                ],
+                'credits' => $credits,
+            ], request: $request);
+        }
+
+        $credits = [];
+        $person = $this->mediaService->people()->firstWhere('slug', $slug);
+        abort_if(! $person, 404);
+
+        foreach (Media::query()->latest('popularity')->get() as $media) {
+            foreach (($media->characters ?? []) as $character) {
+                if (filled($character['voice_actor'] ?? null) && Str::slug($character['voice_actor']) === $slug) {
+                    $credits[] = ['kind' => 'Seslendirme', 'role' => $character['name'] ?? null, 'media' => ApiMediaResource::make($media, $this->mediaService->fields($request))];
+                }
+            }
+            foreach (($media->staff ?? []) as $staff) {
+                if (filled($staff['name'] ?? null) && Str::slug($staff['name']) === $slug) {
+                    $credits[] = ['kind' => 'Ekip', 'role' => $staff['role'] ?? null, 'media' => ApiMediaResource::make($media, $this->mediaService->fields($request))];
+                }
+            }
+        }
+
+        return ApiResponder::success(['person' => $person, 'credits' => collect($credits)->values()], request: $request);
+    }
+
+    public function bulkImport(Request $request)
+    {
+        abort(404);
+    }
+
+    public function show(string $type, Media $media, Request $request)
     {
         abort_unless($media->type === $type, 404);
 
-        return response()->json(['data' => $this->resource($media)]);
+        return ApiResponder::success(ApiMediaResource::make($media, $this->mediaService->fields($request), $this->mediaService->include($request), true), request: $request);
     }
 
-    private function resource(Media $media): array
+    private function validateList(Request $request): array
     {
-        return [
-            'id' => $media->id,
-            'type' => $media->type,
-            'slug' => $media->slug,
-            'title' => [
-                'romaji' => $media->title,
-                'english' => $media->title_english,
-                'native' => $media->title_native,
-            ],
-            'description' => $media->description,
-            'cover_image' => $media->cover_image,
-            'cover_image_original' => $media->cover_image_original,
-            'banner_image' => $media->banner_image,
-            'banner_image_original' => $media->banner_image_original,
-            'format' => $media->format,
-            'status' => $media->status,
-            'average_score' => $media->average_score,
-            'mean_score' => $media->mean_score,
-            'popularity' => $media->popularity,
-            'favourites' => $media->favourites,
-            'episodes' => $media->episodes,
-            'chapters' => $media->chapters,
-            'volumes' => $media->volumes,
-            'duration' => $media->duration,
-            'country_of_origin' => $media->country_of_origin,
-            'source' => $media->source,
-            'hashtag' => $media->hashtag,
-            'site_url' => $media->site_url,
-            'season' => $media->season,
-            'season_year' => $media->season_year,
-            'start_year' => $media->start_year,
-            'start_date' => $media->start_date?->toDateString(),
-            'end_date' => $media->end_date?->toDateString(),
-            'genres' => $media->genres ?? [],
-            'studios' => $media->studios ?? [],
-            'producers' => $media->producers ?? [],
-            'authors' => $media->authors ?? [],
-            'synonyms' => $media->synonyms ?? [],
-            'characters' => $media->characters ?? [],
-            'relations' => $media->relations ?? [],
-            'recommendations' => $media->recommendations ?? [],
-            'tags' => $media->tags ?? [],
-            'rankings' => $media->rankings ?? [],
-            'staff' => $media->staff ?? [],
-            'external_links' => $media->external_links ?? [],
-            'streaming_episodes' => $media->streaming_episodes ?? [],
-            'trailer' => $media->trailer,
-            'next_airing_episode' => $media->next_airing_episode,
-            'stats' => $media->stats ?? [],
-            'url' => route('media.show', ['type' => $media->type, 'media' => $media]),
-        ];
+        return $request->validate([
+            'type' => ['nullable', 'in:anime,manga'],
+            'q' => ['nullable', 'string', 'max:120'],
+            'genre' => ['nullable', 'string', 'max:80'],
+            'year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
+            'season' => ['nullable', 'string', 'max:40'],
+            'format' => ['nullable', 'string', 'max:40'],
+            'status' => ['nullable', 'string', 'max:40'],
+            'studio' => ['nullable', 'string', 'max:120'],
+            'country' => ['nullable', 'string', 'max:8'],
+            'adult' => ['nullable', 'boolean'],
+            'sort' => ['nullable', 'string', 'max:40'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'minimum_score' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'maximum_score' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'fields' => ['nullable', 'string', 'max:300'],
+            'include' => ['nullable', 'string', 'max:300'],
+        ]);
     }
 }

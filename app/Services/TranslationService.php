@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -15,56 +16,139 @@ class TranslationService
     public function translateToTurkish(?string $text): ?string
     {
         $text = trim(strip_tags((string) $text));
+        $hash = hash('sha256', $text);
 
         if ($text === '') {
+            Log::channel('translation')->info('Translation skipped.', [
+                'reason' => 'empty_text',
+                'target_lang' => 'TR',
+            ]);
+
             return null;
         }
 
-        $provider = $this->settings->get('translation_provider', 'deepl');
+        $provider = (string) $this->settings->get('translation_provider', 'deepl');
 
-        $translated = match ($provider) {
-            'deepl' => $this->translateWithDeepL($text),
-            'google' => $this->translateWithGoogle($text),
-            'gemini' => $this->translateWithGemini($text),
-            'none' => $text,
-            default => $this->translateWithPublicGoogle($text),
-        };
-
-        Log::channel('import')->info('Çeviri tamamlandı.', [
+        Log::channel('translation')->info('Translation started.', [
             'provider' => $provider,
+            'target_lang' => 'TR',
             'length' => mb_strlen($text),
+            'text_hash' => $hash,
         ]);
 
-        return $translated;
+        try {
+            $translated = match ($provider) {
+                'deepl' => $this->translateWithDeepL($text),
+                'google' => $this->translateWithGoogle($text),
+                'gemini' => $this->translateWithGemini($text),
+                'none' => $text,
+                default => $text,
+            };
+
+            Log::channel('translation')->info('Translation completed.', [
+                'provider' => $provider,
+                'target_lang' => 'TR',
+                'length' => mb_strlen($text),
+                'translated_length' => mb_strlen($translated),
+                'text_hash' => $hash,
+            ]);
+
+            return $translated;
+        } catch (\Throwable $exception) {
+            Log::channel('translation')->error('Translation failed.', [
+                'provider' => $provider,
+                'target_lang' => 'TR',
+                'length' => mb_strlen($text),
+                'text_hash' => $hash,
+                'error' => $exception->getMessage(),
+            ]);
+
+            if ($this->settings->get('translation_fallback', 'original') === 'fail') {
+                throw $exception;
+            }
+
+            return $this->fallback($text, $provider, $exception->getMessage());
+        }
+    }
+
+    public function testProvider(string $provider): array
+    {
+        $text = 'This is a translation test.';
+
+        try {
+            $translated = match ($provider) {
+                'deepl' => $this->translateWithDeepL($text),
+                'google' => $this->translateWithGoogle($text),
+                'gemini' => $this->translateWithGemini($text),
+                default => throw new \InvalidArgumentException('Desteklenmeyen provider.'),
+            };
+
+            return [
+                'ok' => true,
+                'provider' => $provider,
+                'message' => 'Baglanti basarili.',
+                'translated' => $translated,
+                'usage' => $provider === 'deepl' ? $this->deepLUsage() : null,
+            ];
+        } catch (\Throwable $exception) {
+            return [
+                'ok' => false,
+                'provider' => $provider,
+                'message' => $exception->getMessage(),
+                'translated' => null,
+                'usage' => null,
+            ];
+        }
     }
 
     private function translateWithDeepL(string $text): string
     {
-        $key = $this->settings->get('deepl_api_key');
+        $key = trim((string) $this->settings->get('deepl_api_key'));
 
-        if ($this->settings->get('deepl_enabled', '0') !== '1' || blank($key)) {
-            return $this->translateWithPublicGoogle($text);
+        if ($this->settings->get('deepl_enabled', '0') !== '1') {
+            throw new \RuntimeException('DeepL aktif degil.');
         }
 
-        $endpoint = Str::contains($key, ':fx')
-            ? 'https://api-free.deepl.com/v2/translate'
-            : 'https://api.deepl.com/v2/translate';
+        if ($key === '') {
+            throw new \RuntimeException('DeepL API anahtari bos.');
+        }
 
-        $response = $this->http()->asForm()->timeout(20)->post($endpoint, [
-            'auth_key' => $key,
-            'text' => $text,
-            'target_lang' => 'TR',
+        $endpoint = $this->deepLEndpoint($key).'/v2/translate';
+        $startedAt = microtime(true);
+        $response = $this->deepLHttp($key)
+            ->asForm()
+            ->timeout(25)
+            ->post($endpoint, [
+                'text' => $text,
+                'target_lang' => 'TR',
+            ]);
+
+        Log::channel('translation')->info('DeepL request completed.', [
+            'endpoint' => $this->maskedEndpoint($endpoint),
+            'http_status' => $response->status(),
+            'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            'length' => mb_strlen($text),
         ]);
 
-        return $response->json('translations.0.text') ?: $this->translateWithPublicGoogle($text);
+        if (! $response->ok()) {
+            throw new \RuntimeException('DeepL HTTP '.$response->status().': '.mb_substr((string) $response->body(), 0, 300));
+        }
+
+        $translated = $response->json('translations.0.text');
+
+        if (blank($translated)) {
+            throw new \RuntimeException('DeepL bos ceviri dondu.');
+        }
+
+        return html_entity_decode((string) $translated, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     private function translateWithGoogle(string $text): string
     {
-        $key = $this->settings->get('google_translate_api_key');
+        $key = trim((string) $this->settings->get('google_translate_api_key'));
 
-        if ($this->settings->get('google_translate_enabled', '0') !== '1' || blank($key)) {
-            return $this->translateWithPublicGoogle($text);
+        if ($this->settings->get('google_translate_enabled', '0') !== '1' || $key === '') {
+            throw new \RuntimeException('Google Translate aktif degil veya anahtar bos.');
         }
 
         $response = $this->http()->timeout(20)->post("https://translation.googleapis.com/language/translate/v2?key={$key}", [
@@ -73,15 +157,25 @@ class TranslationService
             'format' => 'text',
         ]);
 
-        return $response->json('data.translations.0.translatedText') ?: $this->translateWithPublicGoogle($text);
+        if (! $response->ok()) {
+            throw new \RuntimeException('Google Translate HTTP '.$response->status());
+        }
+
+        $translated = $response->json('data.translations.0.translatedText');
+
+        if (blank($translated)) {
+            throw new \RuntimeException('Google Translate bos ceviri dondu.');
+        }
+
+        return html_entity_decode((string) $translated, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     private function translateWithGemini(string $text): string
     {
-        $key = $this->settings->get('gemini_api_key');
+        $key = trim((string) $this->settings->get('gemini_api_key'));
 
-        if ($this->settings->get('gemini_enabled', '0') !== '1' || blank($key)) {
-            return $this->translateWithPublicGoogle($text);
+        if ($this->settings->get('gemini_enabled', '0') !== '1' || $key === '') {
+            throw new \RuntimeException('Gemini aktif degil veya anahtar bos.');
         }
 
         $response = $this->http()->timeout(30)->post(
@@ -89,13 +183,43 @@ class TranslationService
             [
                 'contents' => [[
                     'parts' => [[
-                        'text' => "Aşağıdaki anime/manga özetini doğal Türkçeye çevir. Sadece çeviriyi yaz:\n\n{$text}",
+                        'text' => "Asagidaki anime/manga ozetini dogal Turkceye cevir. Sadece ceviriyi yaz:\n\n{$text}",
                     ]],
                 ]],
             ],
         );
 
-        return $response->json('candidates.0.content.parts.0.text') ?: $this->translateWithPublicGoogle($text);
+        if (! $response->ok()) {
+            throw new \RuntimeException('Gemini HTTP '.$response->status());
+        }
+
+        $translated = $response->json('candidates.0.content.parts.0.text');
+
+        if (blank($translated)) {
+            throw new \RuntimeException('Gemini bos ceviri dondu.');
+        }
+
+        return trim((string) $translated);
+    }
+
+    private function fallback(string $text, string $failedProvider, string $reason): string
+    {
+        $fallback = (string) $this->settings->get('translation_fallback', 'original');
+
+        Log::channel('translation')->warning('Translation fallback used.', [
+            'failed_provider' => $failedProvider,
+            'fallback' => $fallback,
+            'reason' => $reason,
+            'length' => mb_strlen($text),
+            'text_hash' => hash('sha256', $text),
+        ]);
+
+        return match ($fallback) {
+            'google' => $this->translateWithGoogle($text),
+            'gemini' => $this->translateWithGemini($text),
+            'public_google' => $this->translateWithPublicGoogle($text),
+            default => $text,
+        };
     }
 
     private function translateWithPublicGoogle(string $text): string
@@ -116,7 +240,59 @@ class TranslationService
         return $chunks !== '' ? html_entity_decode($chunks, ENT_QUOTES | ENT_HTML5, 'UTF-8') : $text;
     }
 
-    private function http(): \Illuminate\Http\Client\PendingRequest
+    private function deepLEndpoint(string $key): string
+    {
+        $mode = (string) $this->settings->get('deepl_endpoint_type', 'auto');
+
+        return match ($mode) {
+            'free' => 'https://api-free.deepl.com',
+            'pro' => 'https://api.deepl.com',
+            default => Str::contains($key, ':fx') ? 'https://api-free.deepl.com' : 'https://api.deepl.com',
+        };
+    }
+
+    private function deepLUsage(): ?array
+    {
+        $key = trim((string) $this->settings->get('deepl_api_key'));
+
+        if ($key === '') {
+            return null;
+        }
+
+        $endpoint = $this->deepLEndpoint($key).'/v2/usage';
+        $response = $this->deepLHttp($key)
+            ->timeout(15)
+            ->get($endpoint);
+
+        if (! $response->ok()) {
+            return [
+                'ok' => false,
+                'http_status' => $response->status(),
+                'checked_at' => now()->toDateTimeString(),
+            ];
+        }
+
+        return [
+            'ok' => true,
+            'character_count' => $response->json('character_count'),
+            'character_limit' => $response->json('character_limit'),
+            'checked_at' => now()->toDateTimeString(),
+        ];
+    }
+
+    private function maskedEndpoint(string $endpoint): string
+    {
+        return str_replace(['https://'], '', $endpoint);
+    }
+
+    private function deepLHttp(string $key): PendingRequest
+    {
+        return $this->http()->withHeaders([
+            'Authorization' => 'DeepL-Auth-Key '.$key,
+        ]);
+    }
+
+    private function http(): PendingRequest
     {
         return Http::withOptions([
             'verify' => (bool) config('services.http.verify_ssl', true),

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Media;
+use App\Models\Studio;
 use App\Services\Settings;
 use App\Support\Seo;
 use Illuminate\Support\Str;
@@ -10,6 +11,52 @@ use Illuminate\Support\Str;
 class StudioController extends Controller
 {
     public function index(Settings $settings)
+    {
+        $studios = Studio::query()
+            ->where('media_count', '>', 0)
+            ->orderByDesc('media_count')
+            ->paginate(72)
+            ->withQueryString();
+
+        if ($studios->total() === 0) {
+            return view('studios.index', [
+                'settings' => $settings->allPublic(),
+                'studios' => $this->legacyStudios(),
+                'seo' => Seo::defaults(['title' => 'Stüdyolar - nozu.me']),
+            ]);
+        }
+
+        return view('studios.index', [
+            'settings' => $settings->allPublic(),
+            'studios' => $studios,
+            'seo' => Seo::defaults(['title' => 'Stüdyolar - nozu.me']),
+        ]);
+    }
+
+    public function show(string $slug, Settings $settings)
+    {
+        $studio = Studio::query()->where('slug', $slug)->first();
+
+        if (! $studio) {
+            return $this->legacyShow($slug, $settings);
+        }
+
+        $items = $studio->media()
+            ->latest('media.popularity')
+            ->paginate(36)
+            ->withQueryString();
+
+        abort_if($items->isEmpty(), 404);
+
+        return view('studios.show', [
+            'settings' => $settings->allPublic(),
+            'studio' => ['name' => $studio->name, 'slug' => $studio->slug],
+            'items' => $items,
+            'seo' => Seo::defaults(['title' => "{$studio->name} - nozu.me"]),
+        ]);
+    }
+
+    private function legacyStudios()
     {
         $studios = [];
 
@@ -21,14 +68,10 @@ class StudioController extends Controller
             }
         }
 
-        return view('studios.index', [
-            'settings' => $settings->allPublic(),
-            'studios' => collect($studios)->sortByDesc('count')->values(),
-            'seo' => Seo::defaults(['title' => 'Stüdyolar - nozu.me']),
-        ]);
+        return collect($studios)->sortByDesc('count')->values();
     }
 
-    public function show(string $slug, Settings $settings)
+    private function legacyShow(string $slug, Settings $settings)
     {
         $items = Media::query()
             ->where('studios', 'like', '%'.str_replace('-', ' ', $slug).'%')

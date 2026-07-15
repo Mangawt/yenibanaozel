@@ -71,9 +71,9 @@ class ImportQueueJob implements ShouldQueue
 
         Log::channel('import')->info('Import job başladı.', $this->context($item));
 
-        if ($this->mediaExists($item)) {
+        if ($this->mediaExists($item) && ! $item->force_refresh) {
             $item->update([
-                'status' => ImportQueue::STATUS_COMPLETED,
+                'status' => ImportQueue::STATUS_SKIPPED,
                 'error_message' => null,
             ]);
 
@@ -90,7 +90,7 @@ class ImportQueueJob implements ShouldQueue
 
         try {
             Log::channel('import')->info('API çağrıldı.', $this->context($item));
-            $media = $external->import($item->source, $item->type, $item->external_id);
+            $media = $external->import($item->source, $item->type, $item->external_id, $item->force_refresh);
 
             $item->update([
                 'status' => ImportQueue::STATUS_COMPLETED,
@@ -171,6 +171,7 @@ class ImportQueueJob implements ShouldQueue
             'external_id' => $item->external_id,
             'batch_id' => $item->batch_id,
             'attempts' => $item->attempts,
+            'force_refresh' => $item->force_refresh,
         ];
     }
 }

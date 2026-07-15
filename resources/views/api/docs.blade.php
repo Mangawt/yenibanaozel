@@ -1,47 +1,83 @@
-@extends('layouts.app', ['settings' => ['site_name' => 'nozu.me']])
+@extends('layouts.app')
 
 @section('content')
+    @php($apiBase = rtrim(config('nozu_openapi.servers.0.url', 'https://nozu.me/api/v1'), '/'))
     <section class="api-hero">
-        <p class="eyebrow">nozu.me API</p>
-        <h1>Türkçe anime ve manga verisini uygulamana bağla</h1>
-        <p>nozu.me API; Türkçeleştirilmiş tür/format/durum alanları, yerel görsel bağlantıları, karakterler, ilişkiler, ekip, etiketler, bağlantılar ve istatistiklerle JSON olarak sunar.</p>
+        <p class="eyebrow">nozu.me API v1</p>
+        <h1>Ücretsiz anime ve manga REST API</h1>
+        <p>Nozu API; mobil uygulama, Discord botu ve kişisel projeler için açık JSON endpointleri sunar. Anahtar veya başvuru gerekmez; standart response, pagination, fields/include ve HTTP cache desteği hazır gelir.</p>
+        <div class="actions">
+            <a class="button primary" href="#baslangic">Hemen kullan</a>
+            <a class="button" href="{{ $apiBase }}/openapi.json">OpenAPI JSON</a>
+        </div>
     </section>
 
-    <section class="docs-grid">
-        <article class="panel docs">
-            <h2>1. Arama</h2>
-            <p>Başlık, tür ve sayfalama ile içerik arayabilirsin.</p>
-            <pre><code>GET {{ url('/api/v1/search') }}?type=anime&q=naruto&per_page=24</code></pre>
+    <nav class="api-doc-nav">
+        <a href="#baslangic">Başlangıç</a>
+        <a href="#response">Response</a>
+        <a href="#search">Arama</a>
+        <a href="#detail">Detay</a>
+        <a href="#lookup">Çoklu kayıt</a>
+        <a href="#cache">Cache</a>
+    </nav>
+
+    <section class="api-layout">
+        <article class="endpoint-card" id="baslangic">
+            <span class="method">GET</span>
+            <h3>Başlangıç</h3>
+            <p class="muted">Tüm public endpointler `/api/v1` altında çalışır. İsteklere API anahtarı eklemen gerekmez.</p>
+            <pre><code>fetch('{{ $apiBase }}/latest')
+  .then(response => response.json())
+  .then(console.log)</code></pre>
         </article>
 
-        <article class="panel docs">
-            <h2>2. Detay</h2>
-            <p>Slug ile tekil anime veya manga detayını çekersin.</p>
-            <pre><code>GET {{ url('/api/v1/anime/anime-naruto-20') }}
-GET {{ url('/api/v1/manga/{slug}') }}</code></pre>
-        </article>
-
-        <article class="panel docs">
-            <h2>3. Kullanım limiti</h2>
-            <p>Herkese açık API dakikada 30 istek sınırıyla çalışır.</p>
-            <pre><code>HTTP 429 Too Many Requests</code></pre>
-        </article>
-
-        <article class="panel docs">
-            <h2>4. Dönen ana alanlar</h2>
-            <p>Yanıt; başlıklar, Türkçe özet, yerel görseller, türler, karakterler, ilişkiler, öneriler, ekip, resmi bağlantılar, yayın bağlantıları ve dağılım istatistiklerini içerir.</p>
+        <article class="endpoint-card" id="response">
+            <h3>Standart response</h3>
             <pre><code>{
-  "data": [{
-    "type": "anime",
-    "title": {"romaji": "Naruto", "native": "NARUTO -ナルト-"},
-    "genres": ["Aksiyon", "Macera", "Dram"],
-    "cover_image": "/storage/media/anime/20/covers/...",
-    "characters": [],
-    "relations": [],
-    "rankings": [],
-    "external_links": [],
-    "stats": {}
-  }]
+  "success": true,
+  "data": [],
+  "meta": {
+    "current_page": 1,
+    "per_page": 24,
+    "total": 120,
+    "last_page": 5
+  },
+  "links": {
+    "next": "..."
+  }
+}</code></pre>
+        </article>
+
+        <article class="endpoint-card" id="search">
+            <span class="method">GET</span>
+            <h3>/api/v1/search</h3>
+            <p class="muted">Parametreler: type, q, genre, year, season, format, status, studio, country, adult, sort, page, per_page, minimum_score, maximum_score.</p>
+            <pre><code>{{ $apiBase }}/search?type=manga&q=one&fields=title,cover_image,genres</code></pre>
+        </article>
+
+        <article class="endpoint-card" id="detail">
+            <span class="method">GET</span>
+            <h3>Detay ve include</h3>
+            <p class="muted">Detay endpointlerinde büyük koleksiyonları yalnızca ihtiyaç duyduğunda isteyebilirsin.</p>
+            <pre><code>{{ $apiBase }}/anime/ornek-slug?include=characters,relations,staff,recommendations</code></pre>
+        </article>
+
+        <article class="endpoint-card" id="lookup">
+            <span class="method">GET/POST</span>
+            <h3>Çoklu kayıt</h3>
+            <pre><code>GET {{ $apiBase }}/media?ids=20,30,41
+
+POST {{ $apiBase }}/media/batch
+{"ids": [20, 30, 41]}</code></pre>
+        </article>
+
+        <article class="endpoint-card" id="cache">
+            <h3>Cache ve hatalar</h3>
+            <p class="muted">Yanıtlarda ETag, Last-Modified ve Cache-Control headerları bulunur. Public API limiti 60 istek/dakika/IP şeklindedir. Hatalar da aynı JSON formatıyla döner.</p>
+            <pre><code>{
+  "success": false,
+  "message": "Kayıt bulunamadı.",
+  "errors": []
 }</code></pre>
         </article>
     </section>

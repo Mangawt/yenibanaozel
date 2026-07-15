@@ -1,14 +1,10 @@
-@extends('layouts.app')
+@extends('layouts.admin')
+
+@section('title', 'Nozu CMS')
 
 @section('content')
     <section class="admin-shell">
-        <aside class="admin-sidebar">
-            <strong>nozu.me CMS</strong>
-            <a class="active" href="{{ route('admin.dashboard') }}">Genel Bakış</a>
-            <a href="{{ route('admin.import-queue') }}">Import Queue</a>
-            <a href="{{ route('admin.settings') }}">Ayarlar</a>
-            <form method="post" action="{{ route('admin.logout') }}">@csrf<button>Çıkış</button></form>
-        </aside>
+        @include('admin.partials.sidebar')
 
         <div class="admin-main">
             <section class="admin-hero">
@@ -48,7 +44,7 @@
                         @endif
                         <div>
                             <strong>{{ $result['title'] }}</strong>
-                            <p>{{ $result['format'] }} @if($result['average_score']) · {{ $result['average_score'] }}/100 @endif</p>
+                            <p>{{ $result['format'] }} @if($result['average_score']) - {{ $result['average_score'] }}/100 @endif</p>
                         </div>
                         <form method="post" action="{{ route('admin.import') }}">
                             @csrf

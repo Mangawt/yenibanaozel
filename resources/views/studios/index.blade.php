@@ -9,17 +9,27 @@
 
     <section class="directory-grid">
         @foreach($studios as $studio)
-            <a class="directory-card" href="{{ route('studios.show', $studio['slug']) }}">
+            @php
+                $name = is_array($studio) ? $studio['name'] : $studio->name;
+                $slug = is_array($studio) ? $studio['slug'] : $studio->slug;
+                $image = is_array($studio) ? ($studio['sample'] ?? null) : $studio->image;
+                $count = is_array($studio) ? $studio['count'] : $studio->media_count;
+            @endphp
+            <a class="directory-card" href="{{ route('studios.show', $slug) }}">
                 <span class="directory-avatar posterish">
-                    @if($studio['sample'])
-                        <img src="{{ $studio['sample'] }}" alt="">
+                    @if($image)
+                        <img src="{{ $image }}" alt="">
                     @else
-                        {{ mb_substr($studio['name'], 0, 1) }}
+                        {{ mb_substr($name, 0, 1) }}
                     @endif
                 </span>
-                <strong>{{ $studio['name'] }}</strong>
-                <small>{{ $studio['count'] }} içerik</small>
+                <strong>{{ $name }}</strong>
+                <small>{{ $count }} içerik</small>
             </a>
         @endforeach
     </section>
+
+    @if(method_exists($studios, 'links'))
+        {{ $studios->links() }}
+    @endif
 @endsection
