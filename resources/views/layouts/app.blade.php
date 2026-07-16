@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="tr">
 <head>
+    <meta name="google-site-verification" content="27R5jvqeI5wht6bD-5OWLaoFOQWVj7rIqGH8O6BDhis" />
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     @php($seo = \App\Support\Seo::defaults($seo ?? []))

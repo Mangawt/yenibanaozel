@@ -8,7 +8,7 @@
                     <div class="slide-copy">
                         <span>{{ $item->type === 'anime' ? 'Anime' : 'Manga' }} · {{ $item->format }}</span>
                         <h1>{{ $item->title }}</h1>
-                        <p>{{ \Illuminate\Support\Str::limit($item->description, 180) }}</p>
+                        <p>{{ \Illuminate\Support\Str::limit(strip_tags($item->description), 180) }}</p>
                         <a class="button primary" href="{{ route('media.show', ['type' => $item->type, 'media' => $item]) }}">Detaya git</a>
                     </div>
                 </article>

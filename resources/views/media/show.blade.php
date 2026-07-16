@@ -135,7 +135,13 @@
         <div class="main-column">
             <section class="content-section" id="overview">
                 <h2>Özet</h2>
-                <p class="summary">{{ $media->description ?: 'Bu içerik için henüz Türkçe özet eklenmedi.' }}</p>
+                <div class="summary">
+                    @if(filled($media->description))
+                        {!! $media->description !!}
+                    @else
+                        Bu içerik için henüz Türkçe özet eklenmedi.
+                    @endif
+                </div>
             </section>
 
             @if(count($linkedRelations ?? []))
