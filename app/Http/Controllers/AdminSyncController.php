@@ -12,9 +12,16 @@ class AdminSyncController extends Controller
 {
     public function index(Settings $settings)
     {
+        $partitionStatus = request('partition_status', 'all');
+
         return view('admin.sync-index', [
             'settings' => $settings->allPublic(),
-            'states' => SyncState::query()->latest()->paginate(20),
+            'states' => SyncState::query()
+                ->with(['partitions' => fn ($query) => $query->orderByDesc('year')->orderBy('id')])
+                ->latest()
+                ->paginate(20)
+                ->withQueryString(),
+            'partitionStatus' => $partitionStatus,
             'stats' => [
                 'running' => SyncState::query()->where('status', SyncState::STATUS_RUNNING)->count(),
                 'waiting' => SyncState::query()->where('status', SyncState::STATUS_WAITING_RATE_LIMIT)->count(),

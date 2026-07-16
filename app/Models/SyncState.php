@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SyncState extends Model
 {
@@ -49,4 +50,9 @@ class SyncState extends Model
         'next_run_at' => 'datetime',
         'window_started_at' => 'datetime',
     ];
+
+    public function partitions(): HasMany
+    {
+        return $this->hasMany(SyncPartitionState::class);
+    }
 }

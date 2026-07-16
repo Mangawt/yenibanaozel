@@ -171,7 +171,7 @@ Import Queue ekranı otomatik yenilenir ve şu verileri gösterir:
 Örnek Supervisor dosyası:
 
 ```text
-deploy/supervisor/nozume-import-worker.conf
+deploy/supervisor/nozu-workers.conf
 ```
 
 Temel ayarlar:
@@ -200,8 +200,8 @@ php artisan nozume:sync-resume
 
 Supervisor örneğinde iki program hazırdır:
 
-- `nozume-import-worker`
-- `nozume-scanner-worker`
+- `nozu-import`
+- `nozu-scanner`
 
 ## Smart Sync
 
@@ -221,6 +221,28 @@ Scanner doğrudan Media oluşturmaz ve import metodunu doğrudan çağırmaz. Sa
 
 Sync state bilgileri `sync_states` tablosunda saklanır. Böylece scanner restart sonrası kaldığı sayfadan devam edebilir.
 
+Full katalog taramalarında yıl/format ilerlemesi ayrıca `sync_partition_states` tablosunda kalıcı tutulur. Her partition için yıl, format, durum, aktif sayfa, son başarılı sayfa, son sayfa, işlenen/yeni/güncellenen/atlanan/hata sayaçları ve hata mesajı saklanır.
+
+Partition durumları:
+
+- `pending`: BEKLİYOR
+- `running`: DEVAM
+- `completed`: OK
+- `waiting_rate_limit`: BEKLEME
+- `paused`: DURAKLATILDI
+- `failed`: HATA
+- `skipped`: ATLANDI
+- `stopped`: DURDURULDU
+
+Admin tablosu:
+
+- Yılları satır, formatları sütun olarak gösterir.
+- Anime sütunları: `TV`, `MOVIE`, `OVA`, `ONA`, `SPECIAL`, `MUSIC`, `TV_SHORT`.
+- Manga sütunları: `MANGA`, `NOVEL`, `ONE_SHOT`.
+- Durum filtreleri: Tümü, Devam eden, Tamamlanan, Hatalı, Bekleyen, Bekleme.
+- Özet alanı tamamlanan partition, devam eden, bekleyen, hatalı ve katalog ilerleme yüzdesini gösterir.
+- Çok geniş kataloglarda tablo ilk yılları ve aktif yılı gösterir; tüm toplamlar yine bütün partition kayıtlarından hesaplanır.
+
 Scanner rate limit davranışı:
 
 - Her GraphQL çağrısı 1 gerçek HTTP isteği sayılır.
@@ -232,6 +254,8 @@ Scanner rate limit davranışı:
 - 429 geldiğinde `Retry-After` headerı okunur.
 - `Retry-After` yoksa en az 60 saniye beklenir.
 - Scanner kalıcı failed durumuna düşmez; `waiting_rate_limit` ile kaldığı sayfadan devam eder.
+- Rate limit sırasında aktif partition `waiting_rate_limit` görünür ve aynı yıl/format/sayfadan devam eder.
+- Cache lock alınamazsa `WithoutOverlapping` job'u düşürmez; `releaseAfter(60)` ile tekrar kuyruğa bırakır. Lock en fazla `expireAfter(300)` saniye tutulur.
 
 Modlar:
 
@@ -245,6 +269,10 @@ Tarama kapsamları:
 - `full_catalog`: Yılları güncel yıldan `end_year` değerine doğru geriye sarar, seçili formatlara böler ve her yıl/format kombinasyonunda en fazla 100 sayfa gezer.
 
 Full katalog taramasında anime ve manga ayrı tipler olarak çalışır. Manga taramalarında yıl filtresi sezon yılı yerine başlangıç tarihi aralığıyla uygulanır. Scanner doğrudan medya oluşturmaz; bulduğu ID'leri her zaman Import Queue sistemine aktarır.
+
+0 sonuç dönen yıl/format partitionları da başarılı tamamlanmış sayılır. Örneğin `2026 / TV_SHORT` ilk sayfada 0 kayıt döndürürse partition `completed` olur, state sonraki yıl/format konumuna ilerler ve yeni `AniListScannerJob` dispatch edilir. Böylece sync state `running` kalıp scanner queue'nun boş kaldığı normal bir akış oluşmaz.
+
+Admin Smart Sync ekranında full katalog taramaları için ayrıntılı yıl/format tablosu gösterilir. Tablo yatay kaydırmalıdır, durum filtresi destekler ve OK/DEVAM/BEKLİYOR/BEKLEME/HATA durumlarını partition tablosundan okur.
 
 Güncel tutma eşikleri:
 
@@ -397,18 +425,31 @@ Deploy:
 
 ```bash
 cd /var/www/nozu
+mkdir -p \
+    storage/framework/cache/data \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs \
+    bootstrap/cache
+chown -R www-data:www-data storage bootstrap/cache
+find storage bootstrap/cache -type d -exec chmod 775 {} \;
+find storage bootstrap/cache -type f -exec chmod 664 {} \;
 composer install --no-dev --optimize-autoloader
 npm install
 npm run build
-php artisan migrate --force
-php artisan storage:link
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan nozume:import-queue
-php artisan nozume:sync-resume
-php artisan queue:restart
+sudo -u www-data php artisan migrate --force
+sudo -u www-data php artisan storage:link
+sudo -u www-data php artisan optimize:clear
+sudo -u www-data php artisan config:cache
+sudo -u www-data php artisan route:cache
+sudo -u www-data php artisan view:cache
+chown -R www-data:www-data storage bootstrap/cache
+sudo -u www-data php artisan nozume:import-queue
+sudo -u www-data php artisan nozume:sync-resume
+sudo -u www-data php artisan queue:restart
 ```
+
+Laravel cache komutlarından sonra `storage` ve `bootstrap/cache` sahipliği tekrar `www-data` yapılmalıdır. Bu, cache lock ve compiled view dosyalarında izin kaynaklı worker hatalarını önler.
 
 Scheduler cron:
 
@@ -416,13 +457,19 @@ Scheduler cron:
 * * * * * cd /var/www/nozu && php artisan schedule:run >> /dev/null 2>&1
 ```
 
+Bu sunucuda cron servis adı:
+
+```bash
+systemctl status cron
+```
+
 Supervisor kontrolü:
 
 ```bash
 sudo supervisorctl reread
 sudo supervisorctl update
-sudo supervisorctl restart nozume-import-worker
-sudo supervisorctl restart nozume-scanner-worker
+sudo supervisorctl restart nozu-import
+sudo supervisorctl restart nozu-scanner
 sudo supervisorctl status
 ```
 
@@ -470,3 +517,8 @@ Test kapsamı şunları içerir:
 - 429 durumunda `Retry-After` değerine uyulur
 - Aktif yayınlanan içerik 6 saat sonra refresh queue'ya alınır
 - Tamamlanmış içerik 30 gün dolmadan refresh queue'ya alınmaz
+- Full katalogda 0 sonuç dönen partition `completed` olur
+- Boş partition sonrası scanner sıradaki yıl/format için yeni job dispatch eder
+- Standard boş tarama `completed` olur ve yeni scanner job oluşturmaz
+- Rate limit sırasında aktif partition `waiting_rate_limit` olur
+- Admin Smart Sync ekranı partition tablosunu OK/DEVAM/Sayfa bilgisiyle render eder

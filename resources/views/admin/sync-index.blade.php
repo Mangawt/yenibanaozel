@@ -85,9 +85,24 @@
 
             <section class="panel">
                 <h2>Tarama durumları</h2>
+                <nav class="partition-filter-tabs">
+                    @foreach([
+                        'all' => 'Tümü',
+                        'running' => 'Devam eden',
+                        'completed' => 'Tamamlanan',
+                        'failed' => 'Hatalı',
+                        'pending' => 'Bekleyen',
+                        'waiting_rate_limit' => 'Bekleme',
+                    ] as $statusKey => $statusLabel)
+                        <a class="{{ $partitionStatus === $statusKey ? 'active' : '' }}" href="{{ route('admin.sync.index', array_filter(['partition_status' => $statusKey === 'all' ? null : $statusKey])) }}">{{ $statusLabel }}</a>
+                    @endforeach
+                </nav>
                 <div class="admin-table">
                     @foreach($states as $state)
-                        @php($filters = $state->filters ?? [])
+                        @php
+                            $filters = $state->filters ?? [];
+                            $showPartitions = ($filters['scan_scope'] ?? 'standard') === 'full_catalog' && $state->partitions->isNotEmpty();
+                        @endphp
                         <article class="sync-row">
                             <div>
                                 <strong>#{{ $state->id }} {{ strtoupper($state->type) }} / {{ $state->mode }}</strong>
@@ -118,6 +133,101 @@
                                     <form method="post" action="{{ route('admin.sync.destroy', $state) }}">@csrf @method('DELETE')<button>Sil</button></form>
                                 @endif
                             </div>
+                            @if($showPartitions)
+                                @php
+                                    $allPartitions = $state->partitions;
+                                    $visiblePartitions = $partitionStatus === 'all'
+                                        ? $allPartitions
+                                        : $allPartitions->where('status', $partitionStatus);
+                                    $formats = collect($filters['formats'] ?? [])->whenEmpty(fn ($items) => $allPartitions->pluck('format')->unique()->values());
+                                    $years = $visiblePartitions->pluck('year')->unique()->values();
+                                    if ($years->count() > 14) {
+                                        $currentYear = (int) ($filters['current_year'] ?? $years->first());
+                                        $years = $years->take(14);
+                                        if (! $years->contains($currentYear)) {
+                                            $years = $years->push($currentYear)->unique()->sortDesc()->values();
+                                        }
+                                    }
+                                    $completedPartitions = $allPartitions->whereIn('status', ['completed', 'skipped'])->count();
+                                    $runningPartitions = $allPartitions->where('status', 'running')->count();
+                                    $waitingPartitions = $allPartitions->where('status', 'pending')->count();
+                                    $failedPartitions = $allPartitions->where('status', 'failed')->count();
+                                    $totalPartitions = max(1, $allPartitions->count());
+                                    $progress = round(($completedPartitions / $totalPartitions) * 100, 2);
+                                    $modeTitles = [
+                                        'missing:anime' => 'Eksik Animeler',
+                                        'updates:anime' => 'Güncellenen Animeler',
+                                        'full:anime' => 'Anime Tam Katalog Durumu',
+                                        'missing:manga' => 'Eksik Mangalar',
+                                        'updates:manga' => 'Güncellenen Mangalar',
+                                        'full:manga' => 'Manga Tam Katalog Durumu',
+                                    ];
+                                    $statusLabels = [
+                                        'pending' => 'BEKLİYOR',
+                                        'running' => 'DEVAM',
+                                        'completed' => 'OK',
+                                        'waiting_rate_limit' => 'BEKLEME',
+                                        'paused' => 'DURAKLATILDI',
+                                        'failed' => 'HATA',
+                                        'skipped' => 'ATLANDI',
+                                        'stopped' => 'DURDURULDU',
+                                    ];
+                                @endphp
+                                <section class="partition-panel">
+                                    <div class="partition-head">
+                                        <div>
+                                            <strong>{{ $modeTitles[$state->mode.':'.$state->type] ?? 'Katalog Durumu' }}</strong>
+                                            <small>Tamamlanan partition: {{ $completedPartitions }} / {{ $allPartitions->count() }} · Devam eden: {{ $runningPartitions }} · Bekleyen: {{ $waitingPartitions }} · Hatalı: {{ $failedPartitions }} · İlerleme: %{{ number_format($progress, 2, ',', '.') }}</small>
+                                        </div>
+                                    </div>
+                                    <div class="partition-table-wrap">
+                                        <table class="partition-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Yıl</th>
+                                                    @foreach($formats as $format)
+                                                        <th>{{ $format }}</th>
+                                                    @endforeach
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @forelse($years as $year)
+                                                    <tr class="{{ (int)($filters['current_year'] ?? 0) === (int)$year ? 'active-year' : '' }}">
+                                                        <th>{{ $year }}</th>
+                                                        @foreach($formats as $format)
+                                                            @php
+                                                                $partition = $allPartitions->first(function ($item) use ($year, $format) {
+                                                                    return (int) $item->year === (int) $year && $item->format === $format;
+                                                                });
+                                                                $hiddenByFilter = $partition && $partitionStatus !== 'all' && $partition->status !== $partitionStatus;
+                                                            @endphp
+                                                            <td>
+                                                                @if($partition && ! $hiddenByFilter)
+                                                                    <span class="partition-cell partition-{{ str_replace('_', '-', $partition->status) }}" title="İşlenen: {{ $partition->processed_count }} · Yeni: {{ $partition->imported_count }} · Güncellenen: {{ $partition->updated_count }} · Atlanan: {{ $partition->skipped_count }}">
+                                                                        <b>{{ $statusLabels[$partition->status] ?? strtoupper($partition->status) }}</b>
+                                                                        @if(in_array($partition->status, ['running', 'waiting_rate_limit'], true))
+                                                                            <small>Sayfa {{ $partition->current_page }}@if($partition->last_page) / {{ $partition->last_page }}@endif</small>
+                                                                        @elseif($partition->status === 'completed')
+                                                                            <small>İşlenen: {{ $partition->processed_count }}</small>
+                                                                            <small>Yeni: {{ $partition->imported_count }} · Güncellenen: {{ $partition->updated_count }} · Atlanan: {{ $partition->skipped_count }}</small>
+                                                                        @elseif($partition->status === 'failed' && $partition->last_error)
+                                                                            <small>{{ \Illuminate\Support\Str::limit($partition->last_error, 42) }}</small>
+                                                                        @endif
+                                                                    </span>
+                                                                @else
+                                                                    <span class="partition-cell partition-empty">-</span>
+                                                                @endif
+                                                            </td>
+                                                        @endforeach
+                                                    </tr>
+                                                @empty
+                                                    <tr><td colspan="{{ $formats->count() + 1 }}">Bu filtrede partition yok.</td></tr>
+                                                @endforelse
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </section>
+                            @endif
                         </article>
                     @endforeach
                 </div>

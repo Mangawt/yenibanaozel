@@ -33,7 +33,7 @@ class AniListScannerJob implements ShouldQueue
         return [
             (new WithoutOverlapping("nozu-scanner:{$this->syncStateId}"))
                 ->releaseAfter(60)
-                ->expireAfter(600),
+                ->expireAfter(300),
         ];
     }
 

@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\AniListScannerJob;
 use App\Models\SyncState;
+use App\Services\SmartSyncService;
 use Illuminate\Console\Command;
 
 class ResumeSmartSync extends Command
@@ -12,7 +12,7 @@ class ResumeSmartSync extends Command
 
     protected $description = 'Yarım kalan Smart Sync taramalarını güvenli şekilde devam ettirir.';
 
-    public function handle(): int
+    public function handle(SmartSyncService $sync): int
     {
         $count = 0;
 
@@ -23,17 +23,9 @@ class ResumeSmartSync extends Command
                     ->orWhere('next_run_at', '<=', now());
             })
             ->orderBy('id')
-            ->chunkById(100, function ($states) use (&$count): void {
+            ->chunkById(100, function ($states) use ($sync, &$count): void {
                 foreach ($states as $state) {
-                    $state->update([
-                        'status' => SyncState::STATUS_RUNNING,
-                        'next_run_at' => now(),
-                    ]);
-
-                    AniListScannerJob::dispatch($state->id)
-                        ->onConnection('database')
-                        ->onQueue('scanner');
-
+                    $sync->resume($state);
                     $count++;
                 }
             });

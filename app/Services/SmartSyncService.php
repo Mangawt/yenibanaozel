@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Jobs\AniListScannerJob;
 use App\Exceptions\AniListRateLimitedException;
+use App\Models\SyncPartitionState;
 use App\Models\SyncState;
 use Illuminate\Support\Facades\Log;
 
@@ -54,6 +55,8 @@ class SmartSyncService
             'next_run_at' => now(),
         ]);
 
+        $this->ensureFullCatalogPartitions($state);
+
         AniListScannerJob::dispatch($state->id)->onConnection('database')->onQueue('scanner');
 
         Log::channel('scanner')->info('Smart sync baslatildi.', [
@@ -89,14 +92,25 @@ class SmartSyncService
             'status' => SyncState::STATUS_PAUSED,
             'paused_at' => now(),
         ]);
+
+        $this->activePartition($state)?->update([
+            'status' => SyncPartitionState::STATUS_PAUSED,
+        ]);
     }
 
     public function resume(SyncState $state): void
     {
+        $this->ensureFullCatalogPartitions($state);
+
         $state->update([
             'status' => SyncState::STATUS_RUNNING,
             'paused_at' => null,
             'next_run_at' => now(),
+        ]);
+
+        $this->activePartition($state)?->update([
+            'status' => SyncPartitionState::STATUS_RUNNING,
+            'last_error' => null,
         ]);
 
         AniListScannerJob::dispatch($state->id)->onConnection('database')->onQueue('scanner');
@@ -108,6 +122,10 @@ class SmartSyncService
             'status' => SyncState::STATUS_STOPPED,
             'finished_at' => now(),
             'next_run_at' => null,
+        ]);
+
+        $this->activePartition($state)?->update([
+            'status' => SyncPartitionState::STATUS_STOPPED,
         ]);
     }
 
@@ -126,11 +144,16 @@ class SmartSyncService
         $filters = $state->filters ?? [];
         $batchSize = min(max((int) ($filters['batch_size'] ?? 1), 1), 5);
         $maxPage = min((int) ($filters['max_page'] ?? 100), 100);
-        $processedAny = false;
+
+        $this->ensureFullCatalogPartitions($state);
 
         for ($index = 0; $index < $batchSize; $index++) {
             $state->refresh();
             $filters = $state->filters ?? [];
+
+            if (! in_array($state->status, [SyncState::STATUS_RUNNING, SyncState::STATUS_WAITING_RATE_LIMIT], true)) {
+                return;
+            }
 
             $requestLimit = (int) ($filters['request_limit_per_minute'] ?? 30);
 
@@ -142,6 +165,7 @@ class SmartSyncService
 
             $catalog = $this->catalogPosition($state);
             $page = max(1, (int) ($catalog['current_page'] ?? $state->current_page));
+            $partition = $this->startPartition($state, $catalog, $page);
             $statusFilter = ! empty($filters['status_in']) ? ['status_in' => $filters['status_in']] : [];
             $options = array_filter(array_merge($filters, [
                 'source' => 'anilist',
@@ -163,12 +187,14 @@ class SmartSyncService
                 : $this->queue->enqueue($options, $ids);
 
             $processed = count($ids);
-            $processedAny = $processedAny || $processed > 0;
+            $partitionFinished = $this->pageFinished($pageInfo, $page, $maxPage);
 
             $nextCatalog = $this->nextCatalogPosition($state, $catalog, $pageInfo, $page, $maxPage);
             $completed = (bool) ($nextCatalog['completed'] ?? false);
             unset($nextCatalog['completed']);
             $nextFilters = array_merge($filters, $nextCatalog);
+
+            $this->updatePartitionAfterPage($partition, $page, $pageInfo, $result, $processed, $partitionFinished);
 
             $state->update([
                 'status' => SyncState::STATUS_RUNNING,
@@ -187,6 +213,8 @@ class SmartSyncService
             ]);
 
             if ($completed) {
+                $this->completeActivePartition($state);
+
                 $state->update([
                     'status' => SyncState::STATUS_COMPLETED,
                     'finished_at' => now(),
@@ -207,12 +235,7 @@ class SmartSyncService
             return;
         }
 
-        if ($processedAny) {
-            AniListScannerJob::dispatch($state->id)
-                ->delay(now()->addSeconds($this->normalDelay()))
-                ->onConnection('database')
-                ->onQueue('scanner');
-        }
+        $this->dispatchNextScannerJob($state, $this->normalDelay());
     }
 
     private function normalizeOptions(array $options): array
@@ -336,6 +359,163 @@ class SmartSyncService
         ];
     }
 
+    private function pageFinished(array $pageInfo, int $page, int $maxPage): bool
+    {
+        $hasNext = (bool) ($pageInfo['hasNextPage'] ?? false);
+        $lastPage = (int) ($pageInfo['lastPage'] ?? ($hasNext ? PHP_INT_MAX : $page));
+
+        return ! $hasNext || $page >= $lastPage || $page >= $maxPage;
+    }
+
+    private function ensureFullCatalogPartitions(SyncState $state): void
+    {
+        $filters = $state->filters ?? [];
+
+        if (($filters['scan_scope'] ?? 'standard') !== 'full_catalog') {
+            return;
+        }
+
+        $formats = $filters['formats'] ?? [];
+        $partitionFormats = $formats !== [] ? $formats : ['ALL'];
+        $startYear = (int) ($filters['start_year'] ?? now()->year);
+        $endYear = (int) ($filters['end_year'] ?? $startYear);
+        $currentYear = (int) ($filters['current_year'] ?? $startYear);
+        $currentFormat = $filters['current_format'] ?? ($formats[0] ?? null);
+        $currentFormatKey = $currentFormat ?: 'ALL';
+        $hasExistingPartitions = $state->partitions()->exists();
+
+        for ($year = $startYear; $year >= $endYear; $year--) {
+            foreach ($partitionFormats as $format) {
+                $status = SyncPartitionState::STATUS_PENDING;
+
+                if (! $hasExistingPartitions && $this->partitionIsBeforeCurrent($year, $format, $currentYear, $currentFormatKey, $partitionFormats)) {
+                    $status = SyncPartitionState::STATUS_COMPLETED;
+                }
+
+                $state->partitions()->firstOrCreate(
+                    ['year' => $year, 'format' => $format],
+                    [
+                        'status' => $status,
+                        'current_page' => 1,
+                        'completed_at' => $status === SyncPartitionState::STATUS_COMPLETED ? now() : null,
+                    ],
+                );
+            }
+        }
+    }
+
+    private function partitionIsBeforeCurrent(int $year, string $format, int $currentYear, string $currentFormat, array $formats): bool
+    {
+        if ($year > $currentYear) {
+            return true;
+        }
+
+        if ($year < $currentYear) {
+            return false;
+        }
+
+        $formatIndex = array_search($format, $formats, true);
+        $currentIndex = array_search($currentFormat, $formats, true);
+
+        if ($formatIndex === false || $currentIndex === false) {
+            return false;
+        }
+
+        return $formatIndex < $currentIndex;
+    }
+
+    private function startPartition(SyncState $state, array $catalog, int $page): ?SyncPartitionState
+    {
+        if (($state->filters['scan_scope'] ?? 'standard') !== 'full_catalog') {
+            return null;
+        }
+
+        $partition = $this->partitionFor($state, $catalog);
+
+        $partition->update([
+            'status' => SyncPartitionState::STATUS_RUNNING,
+            'current_page' => $page,
+            'started_at' => $partition->started_at ?: now(),
+            'last_error' => null,
+        ]);
+
+        return $partition;
+    }
+
+    private function partitionFor(SyncState $state, array $catalog): SyncPartitionState
+    {
+        return $state->partitions()->firstOrCreate(
+            [
+                'year' => (int) ($catalog['current_year'] ?? ($state->filters['current_year'] ?? now()->year)),
+                'format' => (string) (($catalog['current_format'] ?? null) ?: 'ALL'),
+            ],
+            [
+                'status' => SyncPartitionState::STATUS_PENDING,
+                'current_page' => max(1, (int) ($catalog['current_page'] ?? $state->current_page)),
+            ],
+        );
+    }
+
+    private function activePartition(SyncState $state): ?SyncPartitionState
+    {
+        if (($state->filters['scan_scope'] ?? 'standard') !== 'full_catalog') {
+            return null;
+        }
+
+        return $this->partitionFor($state, $this->catalogPosition($state));
+    }
+
+    private function updatePartitionAfterPage(
+        ?SyncPartitionState $partition,
+        int $page,
+        array $pageInfo,
+        array $result,
+        int $processed,
+        bool $partitionFinished,
+    ): void {
+        if (! $partition) {
+            return;
+        }
+
+        $lastPage = $pageInfo['lastPage'] ?? null;
+
+        $partition->update([
+            'status' => $partitionFinished ? SyncPartitionState::STATUS_COMPLETED : SyncPartitionState::STATUS_RUNNING,
+            'current_page' => $partitionFinished ? $page : $page + 1,
+            'last_successful_page' => $page,
+            'last_page' => $lastPage ? (int) $lastPage : $partition->last_page,
+            'processed_count' => $partition->processed_count + $processed,
+            'imported_count' => $partition->imported_count + (int) ($result['created'] ?? 0),
+            'updated_count' => $partition->updated_count + (int) ($result['refreshing'] ?? 0),
+            'skipped_count' => $partition->skipped_count + (int) ($result['skipped'] ?? 0) + (int) ($result['completed_existing'] ?? 0),
+            'last_error' => null,
+            'completed_at' => $partitionFinished ? now() : null,
+        ]);
+    }
+
+    private function completeActivePartition(SyncState $state): void
+    {
+        $this->activePartition($state)?->update([
+            'status' => SyncPartitionState::STATUS_COMPLETED,
+            'completed_at' => now(),
+            'last_error' => null,
+        ]);
+    }
+
+    private function dispatchNextScannerJob(SyncState $state, int $delay): void
+    {
+        $state->refresh();
+
+        if ($state->status !== SyncState::STATUS_RUNNING) {
+            return;
+        }
+
+        AniListScannerJob::dispatch($state->id)
+            ->delay(now()->addSeconds($delay))
+            ->onConnection('database')
+            ->onQueue('scanner');
+    }
+
     private function refreshWindow(SyncState $state): void
     {
         if (! $state->window_started_at || $state->window_started_at->lte(now()->subSeconds(60))) {
@@ -348,6 +528,10 @@ class SmartSyncService
 
     private function delayNextChunk(SyncState $state, int $delay): void
     {
+        $this->activePartition($state)?->update([
+            'status' => SyncPartitionState::STATUS_WAITING_RATE_LIMIT,
+        ]);
+
         $state->update([
             'status' => SyncState::STATUS_WAITING_RATE_LIMIT,
             'next_run_at' => now()->addSeconds($delay),
@@ -361,6 +545,14 @@ class SmartSyncService
 
     private function waitForRateLimit(SyncState $state, int $delay, \Throwable $exception): void
     {
+        if ($partition = $this->activePartition($state)) {
+            $partition->update([
+                'status' => SyncPartitionState::STATUS_WAITING_RATE_LIMIT,
+                'failed_count' => $partition->failed_count + 1,
+                'last_error' => mb_substr($exception->getMessage(), 0, 1000),
+            ]);
+        }
+
         $state->update([
             'status' => SyncState::STATUS_WAITING_RATE_LIMIT,
             'failed_count' => $state->failed_count + 1,

@@ -1,0 +1,12 @@
+ app/Console/Commands/ResumeSmartSync.php     |  16 [32m+[m[31m-[m
+ app/Http/Controllers/AdminSyncController.php |   9 [32m+[m[31m-[m
+ app/Jobs/AniListScannerJob.php               |   2 [32m+[m[31m-[m
+ app/Models/SyncState.php                     |   6 [32m+[m
+ app/Services/SmartSyncService.php            | 208 [32m+++++++++++++++++[m[31m-[m
+ app/Services/TranslationService.php          |   2 [32m+[m[31m-[m
+ deploy/supervisor/nozume-import-worker.conf  |  25 [31m---[m
+ docs/DOKUMANTASYON.md                        |  78 [32m+++++[m[31m--[m
+ public/admin.css                             |  27 [32m+++[m
+ resources/views/admin/sync-index.blade.php   | 112 [32m+++++++++[m[31m-[m
+ tests/Feature/SmartSyncRateLimitTest.php     | 310 [32m++++++++++++++++++++++++++[m[31m-[m
+ 11 files changed, 731 insertions(+), 64 deletions(-)
