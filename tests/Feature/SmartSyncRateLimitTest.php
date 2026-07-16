@@ -92,6 +92,7 @@ class SmartSyncRateLimitTest extends TestCase
             'slug' => 'anime-existing-55',
             'title' => 'Existing',
             'source_ids' => ['anilist' => 55],
+            'last_external_sync_at' => now()->subDays(8),
         ]);
 
         $missing = $this->state(['mode' => 'missing']);
@@ -120,13 +121,68 @@ class SmartSyncRateLimitTest extends TestCase
         app(SmartSyncService::class)->start(['type' => 'anime', 'mode' => 'missing']);
     }
 
+    public function test_active_releasing_content_refreshes_after_six_hours(): void
+    {
+        Bus::fake();
+        Http::fake(['https://graphql.anilist.co' => Http::response($this->discoveryResponse([91]))]);
+        Media::query()->create([
+            'type' => 'anime',
+            'slug' => 'anime-active-91',
+            'title' => 'Active',
+            'status' => 'Yayınlanıyor',
+            'source_ids' => ['anilist' => 91],
+            'last_external_sync_at' => now()->subHours(7),
+        ]);
+
+        $updates = $this->state(['mode' => 'updates']);
+        app(SmartSyncService::class)->processChunk($updates);
+
+        $this->assertDatabaseHas('import_queue', [
+            'external_id' => 91,
+            'status' => ImportQueue::STATUS_PENDING,
+            'force_refresh' => true,
+        ]);
+    }
+
+    public function test_finished_content_waits_thirty_days_before_refresh(): void
+    {
+        Bus::fake();
+        Http::fake(['https://graphql.anilist.co' => Http::response($this->discoveryResponse([92]))]);
+        Media::query()->create([
+            'type' => 'anime',
+            'slug' => 'anime-finished-92',
+            'title' => 'Finished',
+            'status' => 'Tamamlandı',
+            'source_ids' => ['anilist' => 92],
+            'last_external_sync_at' => now()->subDays(20),
+        ]);
+
+        $updates = $this->state(['mode' => 'updates']);
+        app(SmartSyncService::class)->processChunk($updates);
+
+        $this->assertDatabaseMissing('import_queue', ['external_id' => 92]);
+
+        Media::query()->where('slug', 'anime-finished-92')->update([
+            'last_external_sync_at' => now()->subDays(31),
+        ]);
+        ImportQueue::query()->delete();
+        $updates = $this->state(['mode' => 'updates']);
+        app(SmartSyncService::class)->processChunk($updates);
+
+        $this->assertDatabaseHas('import_queue', [
+            'external_id' => 92,
+            'status' => ImportQueue::STATUS_PENDING,
+            'force_refresh' => true,
+        ]);
+    }
+
     private function state(array $overrides = []): SyncState
     {
         return SyncState::query()->create(array_replace([
             'source' => 'anilist',
             'type' => 'anime',
             'mode' => 'missing',
-            'filters' => ['type' => 'anime', 'mode' => 'missing', 'batch_size' => 1, 'per_page' => 50],
+            'filters' => ['type' => 'anime', 'mode' => 'missing', 'scan_scope' => 'standard', 'batch_size' => 1, 'per_page' => 50],
             'status' => SyncState::STATUS_RUNNING,
             'current_page' => 1,
             'last_successful_page' => 0,

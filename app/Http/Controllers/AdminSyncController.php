@@ -29,16 +29,29 @@ class AdminSyncController extends Controller
         $validated = $request->validate([
             'type' => ['required', 'in:anime,manga'],
             'mode' => ['required', 'in:missing,full,updates'],
+            'scan_scope' => ['required', 'in:standard,full_catalog'],
             'sort' => ['required', 'in:POPULARITY_DESC,TRENDING_DESC,SCORE_DESC,START_DATE_DESC'],
             'per_page' => ['required', 'integer', 'min:1', 'max:50'],
             'batch_size' => ['required', 'integer', 'min:1', 'max:5'],
             'page' => ['nullable', 'integer', 'min:1'],
-            'max_page' => ['nullable', 'integer', 'min:1', 'max:5000'],
+            'max_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'genre' => ['nullable', 'string', 'max:80'],
             'year' => ['nullable', 'integer', 'min:1940', 'max:2100'],
+            'start_year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
+            'end_year' => ['nullable', 'integer', 'min:1900', 'max:2100'],
+            'update_stale_after_days' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'request_limit_per_minute' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'scheduled_run_type' => ['nullable', 'in:active,recent,decade,monthly'],
+            'automatic' => ['nullable', 'boolean'],
+            'split_formats' => ['nullable', 'boolean'],
+            'prioritize_active' => ['nullable', 'boolean'],
             'season' => ['nullable', 'in:WINTER,SPRING,SUMMER,FALL'],
             'format' => ['nullable', 'string', 'max:40'],
         ]);
+
+        $validated['split_formats'] = $request->boolean('split_formats', true);
+        $validated['prioritize_active'] = $request->boolean('prioritize_active', true);
+        $validated['automatic'] = $request->boolean('automatic', false);
 
         $state = $sync->start($validated);
 

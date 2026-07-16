@@ -61,6 +61,7 @@ class ExternalMediaService
                 'description_original_hash' => $descriptionHash,
                 'translation_provider' => (string) $this->settings->get('translation_provider', config('services.translation.provider', 'azure')),
                 'translated_at' => $description ? now() : null,
+                'last_external_sync_at' => now(),
                 'description' => $description,
                 'cover_image' => $payload['cover_image'] ?? null,
                 'cover_image_original' => $payload['cover_image_original'] ?? null,
@@ -129,6 +130,11 @@ class ExternalMediaService
 
     public function discoverIds(array $options): array
     {
+        return $this->discoverPage($options)['ids'];
+    }
+
+    public function discoverPage(array $options): array
+    {
         $source = $options['source'] ?? 'anilist';
         $type = $options['type'] ?? 'anime';
 
@@ -141,6 +147,7 @@ class ExternalMediaService
         $startPage = max((int) ($options['page'] ?? 1), 1);
         $sort = $options['sort'] ?? 'POPULARITY_DESC';
         $ids = [];
+        $pageInfo = [];
 
         for ($page = $startPage; $page < $startPage + $pages; $page++) {
             $variables = [
@@ -155,7 +162,13 @@ class ExternalMediaService
             }
 
             if (filled($options['year'] ?? null)) {
-                $variables['seasonYear'] = (int) $options['year'];
+                if ($type === 'manga') {
+                    $year = (int) $options['year'];
+                    $variables['startDateGreater'] = (int) sprintf('%04d0101', $year);
+                    $variables['startDateLesser'] = (int) sprintf('%04d1231', $year);
+                } else {
+                    $variables['seasonYear'] = (int) $options['year'];
+                }
             }
 
             if (filled($options['season'] ?? null)) {
@@ -164,6 +177,10 @@ class ExternalMediaService
 
             if (filled($options['format'] ?? null)) {
                 $variables['format'] = $options['format'];
+            }
+
+            if (filled($options['status_in'] ?? null)) {
+                $variables['statusIn'] = array_values((array) $options['status_in']);
             }
 
             $data = $this->aniListGraphql(
@@ -176,9 +193,19 @@ class ExternalMediaService
                     $ids[] = (int) $item['id'];
                 }
             }
+
+            $pageInfo = $data['Page']['pageInfo'] ?? [];
         }
 
-        return array_values(array_unique($ids));
+        return [
+            'ids' => array_values(array_unique($ids)),
+            'pageInfo' => [
+                'currentPage' => $pageInfo['currentPage'] ?? $startPage,
+                'hasNextPage' => array_key_exists('hasNextPage', $pageInfo) ? (bool) $pageInfo['hasNextPage'] : count($ids) > 0,
+                'lastPage' => $pageInfo['lastPage'] ?? null,
+                'total' => $pageInfo['total'] ?? null,
+            ],
+        ];
     }
 
     public function importBatch(array $options): array
@@ -384,9 +411,15 @@ class ExternalMediaService
     private function discoveryQuery(): string
     {
         return '
-            query ($type: MediaType, $perPage: Int, $page: Int, $genre: String, $seasonYear: Int, $season: MediaSeason, $format: MediaFormat, $sort: [MediaSort]) {
+            query ($type: MediaType, $perPage: Int, $page: Int, $genre: String, $seasonYear: Int, $season: MediaSeason, $format: MediaFormat, $sort: [MediaSort], $statusIn: [MediaStatus], $startDateGreater: FuzzyDateInt, $startDateLesser: FuzzyDateInt) {
                 Page(page: $page, perPage: $perPage) {
-                    media(type: $type, genre: $genre, seasonYear: $seasonYear, season: $season, format: $format, isAdult: false, sort: $sort) {
+                    pageInfo {
+                        currentPage
+                        hasNextPage
+                        lastPage
+                        total
+                    }
+                    media(type: $type, genre: $genre, seasonYear: $seasonYear, season: $season, format: $format, status_in: $statusIn, startDate_greater: $startDateGreater, startDate_lesser: $startDateLesser, isAdult: false, sort: $sort) {
                         id
                     }
                 }

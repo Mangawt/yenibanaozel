@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -56,3 +57,43 @@ Artisan::command('nozume:normalize-media', function () {
 
     $this->info('Media data normalized.');
 })->purpose('Normalize media labels and storage paths.');
+
+Schedule::command('nozu:smart-sync-schedule active anime')
+    ->everySixHours()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('nozu:smart-sync-schedule active manga')
+    ->everySixHours()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('nozu:smart-sync-schedule recent anime')
+    ->dailyAt('02:10')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('nozu:smart-sync-schedule recent manga')
+    ->dailyAt('02:40')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('nozu:smart-sync-schedule decade anime')
+    ->weeklyOn(1, '03:10')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('nozu:smart-sync-schedule decade manga')
+    ->weeklyOn(1, '03:40')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('nozu:smart-sync-schedule monthly anime')
+    ->monthlyOn(1, '04:10')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('nozu:smart-sync-schedule monthly manga')
+    ->monthlyOn(1, '04:40')
+    ->withoutOverlapping()
+    ->onOneServer();

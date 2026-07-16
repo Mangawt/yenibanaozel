@@ -22,6 +22,7 @@ class Media extends Model
         'description_original_hash',
         'translation_provider',
         'translated_at',
+        'last_external_sync_at',
         'cover_image',
         'cover_image_original',
         'banner_image',
@@ -89,6 +90,7 @@ class Media extends Model
         'start_date' => 'date',
         'end_date' => 'date',
         'translated_at' => 'datetime',
+        'last_external_sync_at' => 'datetime',
     ];
 
     public static function makeSlug(string $title, string $type, ?int $sourceId = null): string

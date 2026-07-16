@@ -239,6 +239,46 @@ Modlar:
 - `full`: Mevcut ve yeni içerikleri kuyruğa alabilir
 - `updates`: Mevcut içerikleri refresh kuyruğuna alabilir
 
+Tarama kapsamları:
+
+- `standard`: Seçilen filtre ve sayfa aralığı için normal tarama yapar.
+- `full_catalog`: Yılları güncel yıldan `end_year` değerine doğru geriye sarar, seçili formatlara böler ve her yıl/format kombinasyonunda en fazla 100 sayfa gezer.
+
+Full katalog taramasında anime ve manga ayrı tipler olarak çalışır. Manga taramalarında yıl filtresi sezon yılı yerine başlangıç tarihi aralığıyla uygulanır. Scanner doğrudan medya oluşturmaz; bulduğu ID'leri her zaman Import Queue sistemine aktarır.
+
+Güncel tutma eşikleri:
+
+- `RELEASING`: 6 saatte bir yenilenebilir.
+- `NOT_YET_RELEASED`: 12 saatte bir yenilenebilir.
+- `HIATUS`: 3 günde bir yenilenebilir.
+- `FINISHED`: 30 günde bir yenilenebilir.
+- `CANCELLED`: 90 günde bir yenilenebilir.
+
+Bu eşikler `last_external_sync_at` alanına göre hesaplanır. Başarılı import veya refresh sonunda bu alan güncellenir. `prioritize_active` kapatılırsa genel `update_stale_after_days` değeri kullanılır.
+
+Planlı Smart Sync görevleri:
+
+- Aktif anime: 6 saatte bir
+- Aktif manga: 6 saatte bir
+- Son yıllar anime/manga: günde bir
+- Son 10 yıl anime/manga: haftada bir
+- Tüm katalog anime/manga: ayda bir
+
+Scheduler şu komutları çalıştırır:
+
+```bash
+php artisan nozu:smart-sync-schedule active anime
+php artisan nozu:smart-sync-schedule active manga
+php artisan nozu:smart-sync-schedule recent anime
+php artisan nozu:smart-sync-schedule recent manga
+php artisan nozu:smart-sync-schedule decade anime
+php artisan nozu:smart-sync-schedule decade manga
+php artisan nozu:smart-sync-schedule monthly anime
+php artisan nozu:smart-sync-schedule monthly manga
+```
+
+Planlı taramalar `withoutOverlapping` ve duplicate sync kontrolüyle korunur; aynı tür, mod ve kapsam için çalışan bir scanner varken ikincisi başlatılmaz.
+
 ## Nozu API
 
 Public API dokümantasyonu:
@@ -305,7 +345,25 @@ API response'larında HTTP cache için `ETag`, `Last-Modified` ve `Cache-Control
 
 Çeviri ayarları admin panelinden yönetilir.
 
-Aktif sağlayıcı `deepl`, `google`, `gemini` veya `none` olabilir. DeepL aktif ve anahtar kayıtlıysa import sırasında özetler otomatik Türkçeye çevrilir.
+Aktif sağlayıcı `azure`, `deepl`, `google`, `gemini` veya `none` olabilir. Import sırasında özetler otomatik Türkçeye çevrilir.
+
+Çeviri sistemi sıralı sağlayıcı zinciriyle çalışır. Bir sağlayıcı kota, `429`, bağlantı veya servis hatası verirse sıradaki sağlayıcı denenir. Varsayılan önerilen sıra:
+
+```text
+gemini,google,azure
+```
+
+Bu sıra admin panelindeki `Çeviri sırası` alanından değiştirilebilir. Zincirde yer alan sağlayıcının kullanılabilmesi için ilgili `aktif` checkbox'ı işaretli ve API anahtarı/region gibi zorunlu alanları dolu olmalıdır.
+
+Önerilen ayar:
+
+- Aktif sağlayıcı: `gemini`
+- Çeviri sırası: `gemini,google,azure`
+- Gemini aktif: açık
+- Google Translate aktif: açık
+- Azure Translator aktif: açık
+
+Gemini Flash için anime, manga, manhwa ve light novel özetlerine özel sistem talimatı kullanılır. Kurallar bilgi eklememeyi/çıkarmamayı, HTML etiketlerini ve paragraf yapısını korumayı, özel isimleri değiştirmemeyi ve terim sözlüğünü bağlama uygun uygulamayı zorunlu kılar.
 
 DeepL çağrılarında header tabanlı authentication kullanılır:
 
@@ -313,7 +371,7 @@ DeepL çağrılarında header tabanlı authentication kullanılır:
 Authorization: DeepL-Auth-Key {API_KEY}
 ```
 
-Çeviri servis anahtarları loglanmaz.
+Çeviri servis anahtarları loglanmaz. Çeviri öncesinde HTML etiketleri silinmez; destekleyen sağlayıcılarda HTML formatı korunarak gönderilir.
 
 ## Katalog Senkronizasyonu
 
@@ -410,3 +468,5 @@ Test kapsamı şunları içerir:
 - 29 gerçek HTTP isteğinde devam eder
 - 30. gerçek HTTP isteğinde sonraki scanner job 60 saniye delay edilir
 - 429 durumunda `Retry-After` değerine uyulur
+- Aktif yayınlanan içerik 6 saat sonra refresh queue'ya alınır
+- Tamamlanmış içerik 30 gün dolmadan refresh queue'ya alınmaz

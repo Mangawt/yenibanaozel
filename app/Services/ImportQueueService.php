@@ -150,6 +150,7 @@ class ImportQueueService
     {
         $source = $options['source'] ?? 'anilist';
         $type = $options['type'] ?? 'anime';
+        $mode = $options['mode'] ?? 'updates';
         $entries = $this->normalizeEntries($ids, $source, $type);
         $created = 0;
         $refreshing = 0;
@@ -157,7 +158,7 @@ class ImportQueueService
         $jobs = [];
         $queueItemIds = [];
 
-        DB::transaction(function () use ($entries, &$created, &$refreshing, &$skipped, &$jobs, &$queueItemIds): void {
+        DB::transaction(function () use ($entries, $mode, $options, &$created, &$refreshing, &$skipped, &$jobs, &$queueItemIds): void {
             foreach ($entries as $entry) {
                 $source = $entry['source'];
                 $type = $entry['type'];
@@ -168,7 +169,18 @@ class ImportQueueService
                     continue;
                 }
 
-                $exists = $this->mediaExists($source, $type, $id);
+                $media = $this->mediaForExternalId($source, $type, $id);
+                $exists = $media !== null;
+
+                if (! $exists && $mode === 'updates') {
+                    $skipped++;
+                    continue;
+                }
+
+                if ($exists && ! $this->shouldRefresh($media, $options)) {
+                    $skipped++;
+                    continue;
+                }
 
                 try {
                     $item = ImportQueue::query()->updateOrCreate(
@@ -467,6 +479,11 @@ class ImportQueueService
 
     private function mediaExists(string $source, string $type, int $externalId): bool
     {
+        return $this->mediaForExternalId($source, $type, $externalId) !== null;
+    }
+
+    private function mediaForExternalId(string $source, string $type, int $externalId): ?Media
+    {
         $slugSuffix = "-{$externalId}";
 
         return Media::query()
@@ -475,7 +492,37 @@ class ImportQueueService
                 $query->where('source_ids', 'like', '%"'.$source.'":'.$externalId.'%')
                     ->orWhere('slug', 'like', '%'.$slugSuffix);
             })
-            ->exists();
+            ->first();
+    }
+
+    private function shouldRefresh(Media $media, array $options): bool
+    {
+        if ((bool) ($options['force_refresh_all'] ?? false)) {
+            return true;
+        }
+
+        $thresholdHours = $this->refreshThresholdHours($media, $options);
+        $lastSync = $media->last_external_sync_at ?: $media->updated_at;
+
+        return ! $lastSync || $lastSync->lte(now()->subHours($thresholdHours));
+    }
+
+    private function refreshThresholdHours(Media $media, array $options): int
+    {
+        if (! (bool) ($options['prioritize_active'] ?? true)) {
+            return max(0, (int) ($options['update_stale_after_days'] ?? 7)) * 24;
+        }
+
+        $status = mb_strtoupper((string) $media->status, 'UTF-8');
+
+        return match ($status) {
+            'RELEASING', 'YAYINLANIYOR', 'DEVAM EDİYOR' => 6,
+            'NOT_YET_RELEASED', 'HENÜZ YAYINLANMADI' => 12,
+            'HIATUS', 'ARA VERDİ' => 72,
+            'FINISHED', 'TAMAMLANDI' => 720,
+            'CANCELLED', 'İPTAL EDİLDİ' => 2160,
+            default => max(0, (int) ($options['update_stale_after_days'] ?? 7)) * 24,
+        };
     }
 
     private function queueExists(string $source, string $type, int $externalId): bool
