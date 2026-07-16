@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 
@@ -26,6 +27,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('admin.view', fn ($user): bool => $user->can('viewAdmin', $user));
         Gate::define('admin.write', fn ($user): bool => $user->can('writeAdmin', $user));
         Gate::define('admin.manage_users', fn ($user): bool => $user->can('manageUsers', $user));
+        Paginator::defaultView('vendor.pagination.nozu');
+        Paginator::defaultSimpleView('vendor.pagination.nozu');
 
         View::composer('*', function ($view): void {
             if (! array_key_exists('settings', $view->getData())) {

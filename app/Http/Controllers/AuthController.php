@@ -53,7 +53,7 @@ class AuthController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
 
-        $user = User::query()->create($validated + ['role' => 'viewer']);
+        $user = User::query()->create($validated + ['role' => 'user']);
         Auth::login($user);
         $request->session()->regenerate();
 

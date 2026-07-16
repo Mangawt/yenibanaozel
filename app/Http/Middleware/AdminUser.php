@@ -12,7 +12,7 @@ class AdminUser
     public function handle(Request $request, Closure $next): Response
     {
         if (! $request->user() || Gate::forUser($request->user())->denies('admin.view')) {
-            abort(403);
+            abort(404);
         }
 
         return $next($request);

@@ -5,7 +5,7 @@
                 <img src="{{ $item->cover_image }}" alt="{{ $item->title }}">
             @endif
             @if($item->average_score)
-                <span class="score-badge">★ {{ number_format($item->average_score / 10, 1) }}</span>
+                <span class="score-badge"><i class="fa-solid fa-star"></i> {{ number_format($item->average_score / 10, 1) }}</span>
             @endif
             <span class="poster-fade"></span>
         </div>

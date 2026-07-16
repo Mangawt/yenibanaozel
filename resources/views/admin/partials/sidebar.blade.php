@@ -12,6 +12,8 @@
     <a class="{{ request()->routeIs('admin.sync.*') ? 'active' : '' }}" href="{{ route('admin.sync.index') }}">Smart Sync</a>
     <a class="{{ request()->routeIs('admin.status') ? 'active' : '' }}" href="{{ route('admin.status') }}">Sistem Durumu</a>
     <a class="{{ request()->routeIs('admin.settings') ? 'active' : '' }}" href="{{ route('admin.settings') }}">Ayarlar</a>
+    <a class="{{ request()->routeIs('admin.users.*') ? 'active' : '' }}" href="{{ route('admin.users.index') }}">Kullanıcılar</a>
+    <a class="{{ request()->routeIs('admin.reports.*') ? 'active' : '' }}" href="{{ route('admin.reports.index') }}">Şikayetler</a>
     <a href="{{ route('home') }}" target="_blank" rel="noopener">Siteye Git</a>
     <form method="post" action="{{ route('admin.logout') }}">@csrf<button>Çıkış</button></form>
 </aside>

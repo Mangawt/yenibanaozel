@@ -18,6 +18,10 @@ Route::prefix('v1')->middleware(['api.public_limit', 'api.log'])->group(function
     Route::get('/studios/{slug}', [ApiController::class, 'studio'])->name('api.studios.show');
     Route::get('/people', [ApiController::class, 'people'])->name('api.people');
     Route::get('/people/{slug}', [ApiController::class, 'person'])->name('api.people.show');
+    Route::get('/profiles', [ApiController::class, 'profiles'])->name('api.profiles');
+    Route::get('/profiles/{username}', [ApiController::class, 'profile'])->name('api.profiles.show');
+    Route::get('/profiles/{username}/followers', [ApiController::class, 'profileFollowers'])->name('api.profiles.followers');
+    Route::get('/profiles/{username}/following', [ApiController::class, 'profileFollowing'])->name('api.profiles.following');
     Route::get('/openapi.json', [ApiController::class, 'openapi'])->name('api.openapi');
     Route::get('/anime/{media:slug}', [ApiController::class, 'show'])
         ->defaults('type', 'anime')

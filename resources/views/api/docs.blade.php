@@ -5,7 +5,7 @@
     <section class="api-hero">
         <p class="eyebrow">nozu.me API v1</p>
         <h1>Ücretsiz anime ve manga REST API</h1>
-        <p>Nozu API; mobil uygulama, Discord botu ve kişisel projeler için açık JSON endpointleri sunar. Anahtar veya başvuru gerekmez; standart response, pagination, fields/include ve HTTP cache desteği hazır gelir.</p>
+        <p>Nozu API; mobil uygulama, Discord botu ve kişisel projeler için açık JSON endpointleri sunar. Anahtar gerekmez; standart response, pagination, fields/include ve HTTP cache desteği hazır gelir.</p>
         <div class="actions">
             <a class="button primary" href="#baslangic">Hemen kullan</a>
             <a class="button" href="{{ $apiBase }}/openapi.json">OpenAPI JSON</a>
@@ -17,6 +17,7 @@
         <a href="#response">Response</a>
         <a href="#search">Arama</a>
         <a href="#detail">Detay</a>
+        <a href="#profiles">Profiller</a>
         <a href="#lookup">Çoklu kayıt</a>
         <a href="#cache">Cache</a>
     </nav>
@@ -60,6 +61,16 @@
             <h3>Detay ve include</h3>
             <p class="muted">Detay endpointlerinde büyük koleksiyonları yalnızca ihtiyaç duyduğunda isteyebilirsin.</p>
             <pre><code>{{ $apiBase }}/anime/ornek-slug?include=characters,relations,staff,recommendations</code></pre>
+        </article>
+
+        <article class="endpoint-card" id="profiles">
+            <span class="method">GET</span>
+            <h3>Profil ve takip API</h3>
+            <p class="muted">Kullanıcı profilleri, sosyal bağlantılar, favoriler, izleme listesi, takipçiler ve takip edilenler public API içinde okunabilir.</p>
+            <pre><code>GET {{ $apiBase }}/profiles
+GET {{ $apiBase }}/profiles/admin
+GET {{ $apiBase }}/profiles/admin/followers
+GET {{ $apiBase }}/profiles/admin/following</code></pre>
         </article>
 
         <article class="endpoint-card" id="lookup">

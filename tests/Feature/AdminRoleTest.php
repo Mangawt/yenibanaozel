@@ -14,14 +14,16 @@ class AdminRoleTest extends TestCase
 
     public function test_guest_cannot_access_admin_dashboard(): void
     {
-        $this->get('/admin/dashboard')->assertRedirect();
+        $this->get('/admin')->assertNotFound();
+        $this->get('/admin/dashboard')->assertNotFound();
+        $this->get('/adminasip')->assertOk();
     }
 
     public function test_normal_user_cannot_access_admin_dashboard(): void
     {
-        $this->actingAs($this->user('member'))
+        $this->actingAs($this->user('user'))
             ->get('/admin/dashboard')
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_admin_can_access_admin_dashboard(): void
@@ -31,7 +33,7 @@ class AdminRoleTest extends TestCase
             ->assertOk();
     }
 
-    public function test_viewer_can_view_but_cannot_write(): void
+    public function test_user_cannot_view_admin_or_write(): void
     {
         $media = Media::query()->create([
             'type' => 'anime',
@@ -39,13 +41,13 @@ class AdminRoleTest extends TestCase
             'title' => 'Test Anime',
         ]);
 
-        $this->actingAs($this->user('viewer'))
+        $this->actingAs($this->user('user'))
             ->get('/admin/dashboard')
-            ->assertOk();
+            ->assertNotFound();
 
-        $this->actingAs($this->user('viewer'))
+        $this->actingAs($this->user('user'))
             ->put("/admin/media/{$media->id}", ['title' => 'Changed'])
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertSame('Test Anime', $media->refresh()->title);
     }
@@ -61,13 +63,13 @@ class AdminRoleTest extends TestCase
         ]);
 
         for ($index = 0; $index < 5; $index++) {
-            $this->post('/admin/login', [
+            $this->post('/adminasip/login', [
                 'email' => 'admin@example.com',
                 'password' => 'wrong-password',
             ])->assertSessionHasErrors('email');
         }
 
-        $this->post('/admin/login', [
+        $this->post('/adminasip/login', [
             'email' => 'admin@example.com',
             'password' => 'wrong-password',
         ])->assertSessionHasErrors('email');
@@ -79,7 +81,7 @@ class AdminRoleTest extends TestCase
 
         $this->actingAs($user)
             ->post('/admin/logout')
-            ->assertRedirect('/admin');
+            ->assertRedirect('/adminasip');
 
         $this->assertGuest();
     }

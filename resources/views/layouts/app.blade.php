@@ -28,6 +28,7 @@
         document.documentElement.dataset.theme = savedTheme;
     </script>
     <script type="application/ld+json">{!! json_encode($seo['schema'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) !!}</script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer">
     <link rel="stylesheet" href="{{ asset('style.css') }}">
 </head>
 <body>
@@ -57,13 +58,20 @@
             <span data-theme-icon>☾</span>
         </button>
         @auth
-            <a class="avatar-link" href="{{ route('profile.edit') }}">
-                @if(auth()->user()->avatar_path)
-                    <img src="{{ asset('storage/'.auth()->user()->avatar_path) }}" alt="{{ auth()->user()->name }}">
-                @else
-                    <span>{{ mb_substr(auth()->user()->name, 0, 1) }}</span>
-                @endif
-            </a>
+            <div class="user-menu">
+                <button class="avatar-link" type="button" aria-label="Profil menüsü">
+                    @if(auth()->user()->avatar_path)
+                        <img src="{{ asset('storage/'.auth()->user()->avatar_path) }}" alt="{{ auth()->user()->username }}">
+                    @else
+                        <span>{{ mb_substr(auth()->user()->username ?: 'N', 0, 1) }}</span>
+                    @endif
+                </button>
+                <div class="user-dropdown">
+                    <a href="{{ route('profile.edit') }}">Profil</a>
+                    <a href="{{ route('profile.list') }}">Okuma listem</a>
+                    <form method="post" action="{{ route('logout') }}">@csrf<button>Çıkış</button></form>
+                </div>
+            </div>
         @else
             <a class="button ghost" href="{{ route('login') }}">Giriş</a>
         @endauth
@@ -101,7 +109,7 @@
         </nav>
     </div>
     <div class="footer-bottom">
-        <span>Tanıtım, keşif ve kataloglama amacıyla hazırlanmıştır.</span>
+        <span></span>
         <span>© {{ date('Y') }} nozu.me</span>
     </div>
 </footer>

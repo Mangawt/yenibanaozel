@@ -27,7 +27,7 @@ class Seo
         $genres = implode(', ', array_slice($media->genres ?? [], 0, 5));
 
         return self::defaults([
-            'title' => "{$media->title} izle/oku bilgileri, karakterler ve detaylar - nozu.me",
+            'title' => "{$media->title} - Detaylar, Karakterler ve Yorumlar | nozu.me",
             'description' => $description ?: "{$media->title} için Türkçe {$kind} bilgileri, karakterler, ilişkili eserler, ekip ve tür detayları.",
             'image' => $media->cover_image ? url($media->cover_image) : asset('icon.svg'),
             'type' => 'article',

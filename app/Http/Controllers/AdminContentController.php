@@ -102,6 +102,24 @@ class AdminContentController extends Controller
             ->with('status', 'İçerik silindi.');
     }
 
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'type' => ['required', 'in:anime,manga'],
+            'ids' => ['required', 'array', 'min:1', 'max:200'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $deleted = Media::query()
+            ->where('type', $validated['type'])
+            ->whereIn('id', array_unique($validated['ids']))
+            ->delete();
+
+        return redirect()
+            ->route($validated['type'] === 'manga' ? 'admin.manga.index' : 'admin.anime.index')
+            ->with('status', "{$deleted} içerik silindi.");
+    }
+
     public function people(Request $request, Settings $settings)
     {
         $people = Person::query()

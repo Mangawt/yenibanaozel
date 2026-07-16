@@ -65,4 +65,13 @@ class AdminSyncController extends Controller
 
         return back()->with('status', 'Sync durduruldu.');
     }
+
+    public function destroy(SyncState $syncState): RedirectResponse
+    {
+        abort_if(in_array($syncState->status, [SyncState::STATUS_RUNNING, SyncState::STATUS_WAITING_RATE_LIMIT], true), 422);
+
+        $syncState->delete();
+
+        return back()->with('status', 'Tarama durumu silindi.');
+    }
 }

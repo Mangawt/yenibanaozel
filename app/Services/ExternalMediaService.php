@@ -47,6 +47,8 @@ class ExternalMediaService
         $payload = $this->fetchAniListDetails($type, $id);
         $title = $payload['title'] ?: 'Başlıksız';
         $descriptionOriginal = $payload['description'] ?? null;
+        $descriptionHash = $descriptionOriginal ? hash('sha256', trim(strip_tags((string) $descriptionOriginal))) : null;
+        $description = $this->translatedDescription($existing, $descriptionOriginal, $descriptionHash);
 
         $media = Media::query()->updateOrCreate(
             ['slug' => Media::makeSlug($title, $type, $id)],
@@ -56,7 +58,10 @@ class ExternalMediaService
                 'title_english' => $payload['title_english'] ?? null,
                 'title_native' => $payload['title_native'] ?? null,
                 'description_original' => $descriptionOriginal,
-                'description' => $this->translator->translateToTurkish($descriptionOriginal),
+                'description_original_hash' => $descriptionHash,
+                'translation_provider' => (string) $this->settings->get('translation_provider', config('services.translation.provider', 'azure')),
+                'translated_at' => $description ? now() : null,
+                'description' => $description,
                 'cover_image' => $payload['cover_image'] ?? null,
                 'cover_image_original' => $payload['cover_image_original'] ?? null,
                 'banner_image' => $payload['banner_image'] ?? null,
@@ -105,6 +110,21 @@ class ExternalMediaService
         app(CatalogSyncService::class)->syncMedia($media);
 
         return $media;
+    }
+
+    private function translatedDescription(?Media $existing, ?string $descriptionOriginal, ?string $descriptionHash): ?string
+    {
+        if ($existing && $descriptionHash && $existing->description_original_hash === $descriptionHash && filled($existing->description)) {
+            Log::channel('translation')->info('Translation skipped.', [
+                'reason' => 'source_unchanged',
+                'media_id' => $existing->id,
+                'text_hash' => $descriptionHash,
+            ]);
+
+            return $existing->description;
+        }
+
+        return $this->translator->translateToTurkish($descriptionOriginal);
     }
 
     public function discoverIds(array $options): array
@@ -549,4 +569,3 @@ class ExternalMediaService
         ]);
     }
 }
-

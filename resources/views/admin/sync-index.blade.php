@@ -70,6 +70,9 @@
                                 @elseif($state->status === 'paused')
                                     <form method="post" action="{{ route('admin.sync.resume', $state) }}">@csrf<button class="primary">Devam</button></form>
                                 @endif
+                                @if(in_array($state->status, ['completed', 'failed', 'stopped', 'paused'], true))
+                                    <form method="post" action="{{ route('admin.sync.destroy', $state) }}">@csrf @method('DELETE')<button>Sil</button></form>
+                                @endif
                             </div>
                         </article>
                     @endforeach

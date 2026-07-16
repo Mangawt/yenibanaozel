@@ -11,10 +11,6 @@ class UserPolicy
         return in_array($user->role, [
             'super_admin',
             'admin',
-            'moderator',
-            'editor',
-            'translator',
-            'viewer',
         ], true);
     }
 
@@ -23,14 +19,11 @@ class UserPolicy
         return in_array($user->role, [
             'super_admin',
             'admin',
-            'moderator',
-            'editor',
-            'translator',
         ], true);
     }
 
     public function manageUsers(User $user): bool
     {
-        return $user->role === 'super_admin';
+        return in_array($user->role, ['super_admin', 'admin'], true);
     }
 }

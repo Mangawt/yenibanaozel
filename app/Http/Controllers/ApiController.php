@@ -6,6 +6,7 @@ use App\Http\Resources\ApiMediaResource;
 use App\Models\Media;
 use App\Models\Person;
 use App\Models\Studio;
+use App\Models\User;
 use App\Services\ApiMediaService;
 use App\Support\ApiResponder;
 use App\Support\Seo;
@@ -190,6 +191,70 @@ class ApiController extends Controller
         return ApiResponder::success($this->mediaService->people(), request: $request);
     }
 
+    public function profiles(Request $request)
+    {
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:80'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $users = User::query()
+            ->withCount(['followers', 'following'])
+            ->when($validated['q'] ?? null, fn ($query, $q) => $query->where('username', 'like', '%'.$q.'%'))
+            ->latest()
+            ->paginate($validated['per_page'] ?? 24)
+            ->withQueryString();
+
+        return ApiResponder::paginated(
+            $users,
+            $users->getCollection()->map(fn (User $user): array => $this->profilePayload($user)),
+            $request,
+        );
+    }
+
+    public function profile(string $username, Request $request)
+    {
+        $user = User::query()
+            ->where('username', $username)
+            ->withCount(['followers', 'following'])
+            ->firstOrFail();
+
+        return ApiResponder::success([
+            'profile' => $this->profilePayload($user),
+            'favorites' => [
+                'anime' => $user->favoriteMedia()->wherePivot('status', 'favorite')->where('media.type', 'anime')->limit(12)->get()->map(fn (Media $media) => ApiMediaResource::make($media, ['id', 'type', 'slug', 'title', 'cover_image', 'url'])),
+                'manga' => $user->favoriteMedia()->wherePivot('status', 'favorite')->where('media.type', 'manga')->limit(12)->get()->map(fn (Media $media) => ApiMediaResource::make($media, ['id', 'type', 'slug', 'title', 'cover_image', 'url'])),
+            ],
+            'watchlist' => $user->mediaList()
+                ->with('media')
+                ->where('status', '!=', 'favorite')
+                ->latest()
+                ->limit(24)
+                ->get()
+                ->map(fn ($entry): array => [
+                    'status' => $entry->status,
+                    'media' => $entry->media ? ApiMediaResource::make($entry->media, ['id', 'type', 'slug', 'title', 'cover_image', 'url']) : null,
+                ]),
+        ], request: $request);
+    }
+
+    public function profileFollowers(string $username, Request $request)
+    {
+        $user = User::query()->where('username', $username)->firstOrFail();
+        $followers = $user->followers()->withCount(['followers', 'following'])->paginate((int) min($request->integer('per_page', 24), 50))->withQueryString();
+
+        return ApiResponder::paginated($followers, $followers->getCollection()->map(fn (User $item): array => $this->profilePayload($item)), $request);
+    }
+
+    public function profileFollowing(string $username, Request $request)
+    {
+        $user = User::query()->where('username', $username)->firstOrFail();
+        $following = $user->following()->withCount(['followers', 'following'])->paginate((int) min($request->integer('per_page', 24), 50))->withQueryString();
+
+        return ApiResponder::paginated($following, $following->getCollection()->map(fn (User $item): array => $this->profilePayload($item)), $request);
+    }
+
     public function person(string $slug, Request $request)
     {
         $personModel = Person::query()->where('slug', $slug)->first();
@@ -284,5 +349,20 @@ class ApiController extends Controller
             'fields' => ['nullable', 'string', 'max:300'],
             'include' => ['nullable', 'string', 'max:300'],
         ]);
+    }
+
+    private function profilePayload(User $user): array
+    {
+        return [
+            'id' => $user->id,
+            'username' => $user->username,
+            'avatar' => $user->avatar_path ? asset('storage/'.$user->avatar_path) : null,
+            'bio' => $user->bio,
+            'social_links' => $user->social_links ?? [],
+            'followers_count' => $user->followers_count ?? null,
+            'following_count' => $user->following_count ?? null,
+            'url' => route('profile.show', $user->username),
+            'created_at' => $user->created_at?->toISOString(),
+        ];
     }
 }

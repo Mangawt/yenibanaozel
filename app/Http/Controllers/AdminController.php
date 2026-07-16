@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\ImportQueue;
 use App\Models\Media;
+use App\Models\Comment;
+use App\Models\Report;
+use App\Models\User;
 use App\Services\ExternalMediaService;
 use App\Services\ImportQueueService;
 use App\Services\Settings;
@@ -23,6 +26,10 @@ class AdminController extends Controller
     {
         if (Auth::check() && $this->isAdmin(Auth::user()?->role)) {
             return redirect()->route('admin.dashboard');
+        }
+
+        if (Auth::check()) {
+            abort(404);
         }
 
         return view('admin.login');
@@ -252,14 +259,78 @@ class AdminController extends Controller
                 'deepl_api_key' => $settings->get('deepl_api_key'),
                 'google_translate_api_key' => $settings->get('google_translate_api_key'),
                 'gemini_api_key' => $settings->get('gemini_api_key'),
-                'translation_provider' => $settings->get('translation_provider', 'deepl'),
+                'translation_provider' => $settings->get('translation_provider', config('services.translation.provider', 'azure')),
+                'translation_provider_chain' => $settings->get('translation_provider_chain', 'gemini,google,azure'),
                 'translation_fallback' => $settings->get('translation_fallback', 'original'),
+                'azure_translator_enabled' => $settings->get('azure_translator_enabled', '1'),
+                'azure_translator_region' => $settings->get('azure_translator_region', config('services.azure_translator.region')),
+                'azure_translator_endpoint' => $settings->get('azure_translator_endpoint', config('services.azure_translator.endpoint')),
+                'azure_translator_key' => $settings->get('azure_translator_key'),
+                'azure_translator_success_count' => $settings->get('azure_translator_success_count', '0'),
+                'azure_translator_failed_count' => $settings->get('azure_translator_failed_count', '0'),
+                'azure_translator_character_count' => $settings->get('azure_translator_character_count', '0'),
+                'azure_translator_last_success_at' => $settings->get('azure_translator_last_success_at'),
+                'azure_translator_last_error' => $settings->get('azure_translator_last_error'),
+                'azure_translator_last_429_at' => $settings->get('azure_translator_last_429_at'),
                 'deepl_endpoint_type' => $settings->get('deepl_endpoint_type', 'auto'),
                 'deepl_enabled' => $settings->get('deepl_enabled', '0'),
                 'google_translate_enabled' => $settings->get('google_translate_enabled', '0'),
                 'gemini_enabled' => $settings->get('gemini_enabled', '0'),
             ],
         ]);
+    }
+
+    public function users(Settings $settings)
+    {
+        return view('admin.users-index', [
+            'settings' => $settings->allPublic(),
+            'users' => User::query()->latest()->paginate(30)->withQueryString(),
+        ]);
+    }
+
+    public function updateUser(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'role' => ['required', 'in:user,admin,super_admin'],
+        ]);
+
+        if ($user->id === $request->user()->id && $validated['role'] === 'user') {
+            return back()->withErrors(['role' => 'Kendi admin yetkini kaldıramazsın.']);
+        }
+
+        $user->update($validated);
+
+        return back()->with('status', 'Kullanıcı rolü güncellendi.');
+    }
+
+    public function reports(Settings $settings)
+    {
+        return view('admin.reports-index', [
+            'settings' => $settings->allPublic(),
+            'reports' => Report::query()
+                ->with(['user', 'reportable'])
+                ->latest()
+                ->paginate(30)
+                ->withQueryString(),
+        ]);
+    }
+
+    public function updateReport(Request $request, Report $report): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'in:open,reviewed,closed'],
+        ]);
+
+        $report->update($validated);
+
+        return back()->with('status', 'Şikayet durumu güncellendi.');
+    }
+
+    public function destroyComment(Comment $comment): RedirectResponse
+    {
+        $comment->delete();
+
+        return back()->with('status', 'Yorum silindi.');
     }
 
     public function saveSettings(Request $request, Settings $settings): RedirectResponse
@@ -269,8 +340,13 @@ class AdminController extends Controller
             'site_description' => ['nullable', 'string', 'max:240'],
             'logo' => ['nullable', 'image', 'max:2048'],
             'favicon' => ['nullable', 'image', 'max:512'],
-            'translation_provider' => ['required', 'in:deepl,google,gemini,none'],
+            'translation_provider' => ['required', 'in:azure,deepl,google,gemini,none'],
+            'translation_provider_chain' => ['nullable', 'string', 'max:120'],
             'translation_fallback' => ['required', 'in:fail,original,google,gemini,public_google'],
+            'azure_translator_enabled' => ['nullable', 'boolean'],
+            'azure_translator_region' => ['nullable', 'string', 'max:80'],
+            'azure_translator_endpoint' => ['nullable', 'url', 'max:180'],
+            'azure_translator_key' => ['nullable', 'string'],
             'deepl_endpoint_type' => ['required', 'in:auto,free,pro'],
             'deepl_api_key' => ['nullable', 'string'],
             'google_translate_api_key' => ['nullable', 'string'],
@@ -291,8 +367,21 @@ class AdminController extends Controller
         unset($validated['logo'], $validated['favicon']);
 
         $validated['deepl_enabled'] = $request->boolean('deepl_enabled');
+        $validated['azure_translator_enabled'] = $request->boolean('azure_translator_enabled');
         $validated['google_translate_enabled'] = $request->boolean('google_translate_enabled');
         $validated['gemini_enabled'] = $request->boolean('gemini_enabled');
+        if (blank($validated['azure_translator_key'] ?? null)) {
+            unset($validated['azure_translator_key']);
+        }
+        if (blank($validated['deepl_api_key'] ?? null)) {
+            unset($validated['deepl_api_key']);
+        }
+        if (blank($validated['google_translate_api_key'] ?? null)) {
+            unset($validated['google_translate_api_key']);
+        }
+        if (blank($validated['gemini_api_key'] ?? null)) {
+            unset($validated['gemini_api_key']);
+        }
         $settings->setMany($validated);
 
         return back()->with('status', 'Ayarlar kaydedildi.');
@@ -301,7 +390,7 @@ class AdminController extends Controller
     public function testTranslation(Request $request, \App\Services\TranslationService $translation): RedirectResponse
     {
         $validated = $request->validate([
-            'provider' => ['required', 'in:deepl,google,gemini'],
+            'provider' => ['required', 'in:azure,deepl,google,gemini'],
         ]);
 
         $result = $translation->testProvider($validated['provider']);
@@ -330,7 +419,7 @@ class AdminController extends Controller
 
     private function isAdmin(?string $role): bool
     {
-        return in_array($role, ['super_admin', 'admin', 'moderator', 'editor', 'translator', 'viewer'], true);
+        return in_array($role, ['super_admin', 'admin'], true);
     }
 
     private function recentLogs(): array

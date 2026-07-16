@@ -121,6 +121,18 @@ class HomeController extends Controller
             'media' => $media,
             'seo' => Seo::media($media),
             'linkedRelations' => $linkedRelations,
+            'comments' => $media->comments()
+                ->whereNull('parent_id')
+                ->with(['user', 'replies.user'])
+                ->latest()
+                ->paginate(8)
+                ->withQueryString(),
+            'listStatus' => auth()->check()
+                ? auth()->user()->mediaList()->where('media_id', $media->id)->where('status', '!=', 'favorite')->value('status')
+                : null,
+            'isFavorite' => auth()->check()
+                ? auth()->user()->mediaList()->where('media_id', $media->id)->where('status', 'favorite')->exists()
+                : false,
             'related' => Media::query()
                 ->whereKeyNot($media->id)
                 ->when($recommendedIds->isNotEmpty(), fn ($query) => $query->where(function ($inner) use ($recommendedIds): void {

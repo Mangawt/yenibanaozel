@@ -1,13 +1,11 @@
 @extends('layouts.admin')
 
-@section('title', 'Nozu CMS Giriş')
+@section('title', 'Admin Paneli')
 
 @section('content')
-    <section class="admin-login">
+    <section class="admin-login minimal-admin-login">
         <div class="login-copy">
-            <span class="eyebrow">nozu.me CMS</span>
-            <h1>Yönetim paneli</h1>
-            <p>İçerik importu, kuyruk takibi ve site ayarları için güvenli giriş.</p>
+            <h1>Admin paneli</h1>
         </div>
 
         <form class="auth-card" method="post" action="{{ route('admin.authenticate') }}">

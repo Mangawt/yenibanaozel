@@ -19,6 +19,9 @@ class Media extends Model
         'title_native',
         'description',
         'description_original',
+        'description_original_hash',
+        'translation_provider',
+        'translated_at',
         'cover_image',
         'cover_image_original',
         'banner_image',
@@ -85,6 +88,7 @@ class Media extends Model
         'is_adult' => 'boolean',
         'start_date' => 'date',
         'end_date' => 'date',
+        'translated_at' => 'datetime',
     ];
 
     public static function makeSlug(string $title, string $type, ?int $sourceId = null): string
@@ -118,6 +122,18 @@ class Media extends Model
     {
         return $this->belongsToMany(Studio::class, 'media_studios')
             ->withPivot(['role'])
+            ->withTimestamps();
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class);
+    }
+
+    public function listedByUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'media_lists')
+            ->withPivot(['status'])
             ->withTimestamps();
     }
 }

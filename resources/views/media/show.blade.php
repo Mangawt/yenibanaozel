@@ -21,24 +21,68 @@
                 @if($media->hashtag)
                     <p class="muted">{{ $media->hashtag }}</p>
                 @endif
+                <div class="hero-favorite-action">
+                    @auth
+                        <form method="post" action="{{ route('media.favorite', $media) }}">
+                            @csrf
+                            <button class="favorite-panel-button {{ $isFavorite ? 'active' : '' }}">
+                                <i class="{{ $isFavorite ? 'fa-solid' : 'fa-regular' }} fa-heart"></i>
+                                <span>{{ $isFavorite ? 'Favoride' : 'Favoriye ekle' }}</span>
+                            </button>
+                        </form>
+                    @else
+                        <a class="favorite-panel-button" href="{{ route('login') }}">
+                            <i class="fa-regular fa-heart"></i>
+                            <span>Favorilere ekle</span>
+                        </a>
+                    @endauth
+                </div>
             </div>
         </div>
     </article>
 
     <nav class="detail-tabs pretty-tabs">
-        <a href="#overview">Özet</a>
-        <a href="#characters">Karakterler</a>
-        <a href="#staff">Ekip</a>
-        <a href="#stats">İstatistik</a>
-        <a href="#links">Bağlantılar</a>
+        <a href="#overview"><i class="fa-regular fa-file-lines"></i> Özet</a>
+        <a href="#characters"><i class="fa-solid fa-users"></i> Karakterler</a>
+        <a href="#staff"><i class="fa-solid fa-user-gear"></i> Ekip</a>
+        <a href="#stats"><i class="fa-solid fa-chart-simple"></i> İstatistik</a>
+        <a href="#links"><i class="fa-solid fa-link"></i> Bağlantılar</a>
+        <a href="#comments"><i class="fa-regular fa-comments"></i> Yorumlar</a>
     </nav>
 
     <div class="content-layout nozu-detail">
         <aside class="side-panel">
+            <div class="detail-action-card">
+                @auth
+                    <form class="media-list-form panel-list-form" method="post" action="{{ route('media.list', $media) }}">
+                        @csrf
+                        <label class="list-control-label"><i class="fa-solid fa-layer-group"></i> İzleme listesi</label>
+                        <select name="status">
+                            <option value="watching" @selected($listStatus === 'watching')>İzliyor</option>
+                            <option value="reading" @selected($listStatus === 'reading')>Okuyor</option>
+                            <option value="completed" @selected($listStatus === 'completed')>Tamamladı</option>
+                            <option value="dropped" @selected($listStatus === 'dropped')>Bıraktı</option>
+                            <option value="planned" @selected($listStatus === 'planned')>Planlıyor</option>
+                        </select>
+                        <button class="panel-save-button"><i class="fa-solid fa-check"></i> Kaydet</button>
+                    </form>
+
+                    @if($listStatus)
+                        <form class="panel-remove-form" method="post" action="{{ route('media.list.remove', $media) }}">
+                            @csrf
+                            @method('DELETE')
+                            <button class="panel-remove-button"><i class="fa-solid fa-xmark"></i> Listeden kaldır</button>
+                        </form>
+                    @endif
+                @else
+                    <a class="button primary" href="{{ route('login') }}"><i class="fa-solid fa-layer-group"></i> Listeye eklemek için giriş yap</a>
+                @endauth
+            </div>
+
             @if(count($media->rankings ?? []))
                 <div class="ranking-box">
                     @foreach(array_slice($media->rankings, 0, 3) as $ranking)
-                        <p>★ #{{ $ranking['rank'] }} {{ $ranking['context'] ?? 'Sıralama' }}</p>
+                        <p><i class="fa-solid fa-star"></i> #{{ $ranking['rank'] }} {{ $ranking['context'] ?? 'Sıralama' }}</p>
                     @endforeach
                 </div>
             @endif
@@ -113,7 +157,7 @@
                                             {{ $relation['title'] }}
                                         @endif
                                     </strong>
-                                    <small>{{ strtoupper($relation['type'] ?? '') }} · {{ $relation['format'] ?? '' }} @if(! empty($relation['status'])) · {{ $relation['status'] }} @endif</small>
+                                    <small>{{ strtoupper($relation['type'] ?? '') }} &middot; {{ $relation['format'] ?? '' }} @if(! empty($relation['status'])) &middot; {{ $relation['status'] }} @endif</small>
                                 </div>
                             </article>
                         @endforeach
@@ -208,6 +252,29 @@
                     </div>
                 </section>
             @endif
+
+            <section class="content-section comments-section" id="comments">
+                <h2>Yorumlar</h2>
+                @auth
+                    <form class="comment-form" method="post" action="{{ route('media.comment', $media) }}">
+                        @csrf
+                        <textarea name="body" rows="4" maxlength="2000" placeholder="Yorumunu yaz..." required></textarea>
+                        <button class="button primary"><i class="fa-regular fa-paper-plane"></i> Yorum yap</button>
+                    </form>
+                @else
+                    <p class="muted">Yorum yapmak için <a href="{{ route('login') }}">giriş yap</a>.</p>
+                @endauth
+
+                <div class="comment-list">
+                    @forelse($comments as $comment)
+                        @include('components.comment-card', ['comment' => $comment, 'media' => $media])
+                    @empty
+                        <p class="muted">Henüz yorum yok.</p>
+                    @endforelse
+                </div>
+
+                {{ $comments->links() }}
+            </section>
         </div>
     </div>
 
