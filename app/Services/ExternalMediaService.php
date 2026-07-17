@@ -27,6 +27,7 @@ class ExternalMediaService
     public function __construct(
         private readonly TranslationService $translator,
         private readonly Settings $settings,
+        private readonly BunnyStorageService $bunny,
     ) {
     }
 
@@ -680,17 +681,16 @@ class ExternalMediaService
                 .$extension;
 
             $disk = Storage::disk('public');
+            $existingLocalCache = $disk->exists($storagePath)
+                && $disk->size($storagePath) >= 512;
 
-            if (
-                $disk->exists($storagePath)
-                && $disk->size($storagePath) >= 512
-            ) {
+            if ($existingLocalCache && ! $this->bunny->enabled()) {
                 $this->imageMetrics['cache_hits']++;
 
                 return Storage::url($storagePath);
             }
 
-            if ($disk->exists($storagePath)) {
+            if ($disk->exists($storagePath) && ! $existingLocalCache) {
                 $disk->delete($storagePath);
             }
 
@@ -716,6 +716,10 @@ class ExternalMediaService
                     ]
                 );
 
+                if ($existingLocalCache) {
+                    return Storage::url($storagePath);
+                }
+
                 return null;
             }
 
@@ -739,7 +743,30 @@ class ExternalMediaService
                     ]
                 );
 
+                if ($existingLocalCache) {
+                    return Storage::url($storagePath);
+                }
+
                 return null;
+            }
+
+            if ($this->bunny->enabled()) {
+                $cdnUrl = $this->bunny->upload(
+                    $storagePath,
+                    $body,
+                    $contentType
+                );
+
+                if ($cdnUrl) {
+                    $this->imageMetrics['downloads']++;
+                    $this->imageMetrics['download_bytes'] += strlen($body);
+
+                    return $cdnUrl;
+                }
+
+                if ($existingLocalCache) {
+                    return Storage::url($storagePath);
+                }
             }
 
             $temporaryPath = $storagePath

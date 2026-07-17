@@ -56,4 +56,12 @@ return [
         'timeout' => env('AZURE_TRANSLATOR_TIMEOUT', 30),
     ],
 
+    'bunny' => [
+        'enabled' => env('BUNNY_ENABLED', false),
+        'storage_zone' => env('BUNNY_STORAGE_ZONE'),
+        'storage_key' => env('BUNNY_STORAGE_KEY'),
+        'storage_endpoint' => rtrim(env('BUNNY_STORAGE_ENDPOINT', 'https://storage.bunnycdn.com'), '/'),
+        'cdn_url' => rtrim(env('BUNNY_CDN_URL', ''), '/'),
+    ],
+
 ];
