@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\AniListRateLimitedException;
+use App\Jobs\CacheMediaImagesJob;
 use App\Models\Media;
 use App\Support\AnimeLabels;
 use Illuminate\Http\Client\PendingRequest;
@@ -14,6 +15,15 @@ use Illuminate\Support\Str;
 
 class ExternalMediaService
 {
+    private array $imageMetrics = [
+        'calls' => 0,
+        'cache_hits' => 0,
+        'downloads' => 0,
+        'failures' => 0,
+        'download_ms' => 0.0,
+        'download_bytes' => 0,
+    ];
+
     public function __construct(
         private readonly TranslationService $translator,
         private readonly Settings $settings,
@@ -108,7 +118,14 @@ class ExternalMediaService
             ],
         );
 
-        app(CatalogSyncService::class)->syncMedia($media);
+        app(CatalogSyncService::class)->syncMedia($media, false);
+
+        CacheMediaImagesJob::dispatch($media->id)->afterCommit();
+
+        Log::channel('import')->info(
+            'Yan görseller images kuyruğuna gönderildi.',
+            ['media_id' => $media->id]
+        );
 
         return $media;
     }
@@ -268,10 +285,25 @@ class ExternalMediaService
 
     private function fetchAniListDetails(string $type, int $id): array
     {
+        $totalStartedAt = microtime(true);
+
+        $this->imageMetrics = [
+            'calls' => 0,
+            'cache_hits' => 0,
+            'downloads' => 0,
+            'failures' => 0,
+            'download_ms' => 0.0,
+            'download_bytes' => 0,
+        ];
+
+        $graphqlStartedAt = microtime(true);
+
         $data = $this->aniListGraphql($this->detailsQuery(), [
             'id' => $id,
             'type' => $type === 'manga' ? 'MANGA' : 'ANIME',
         ]);
+
+        $graphqlMs = (microtime(true) - $graphqlStartedAt) * 1000;
 
         $item = $data['Media'] ?? [];
         $folder = "media/{$type}/{$id}";
@@ -283,16 +315,16 @@ class ExternalMediaService
             'name' => Arr::get($edge, 'node.name.full'),
             'role' => AnimeLabels::staffRole($edge['role'] ?? null),
             'language' => null,
-            'image' => $this->cacheImage(Arr::get($edge, 'node.image.large'), "{$folder}/staff"),
+            'image' => null,
         ])->filter(fn (array $person): bool => filled($person['name']))->values()->all();
 
         $characters = collect(Arr::get($item, 'characters.edges', []))->map(fn (array $edge): array => [
             'id' => Arr::get($edge, 'node.id'),
             'name' => Arr::get($edge, 'node.name.full'),
-            'image' => $this->cacheImage(Arr::get($edge, 'node.image.large'), "{$folder}/characters"),
+            'image' => null,
             'role' => $this->roleLabel($edge['role'] ?? null),
             'voice_actor' => Arr::get($edge, 'voiceActors.0.name.full'),
-            'voice_actor_image' => $this->cacheImage(Arr::get($edge, 'voiceActors.0.image.large'), "{$folder}/voice-actors"),
+            'voice_actor_image' => null,
             'language' => 'Japonca',
         ])->filter(fn (array $character): bool => filled($character['name']))->values()->all();
 
@@ -301,7 +333,7 @@ class ExternalMediaService
             'type' => Arr::get($edge, 'node.type') === 'MANGA' ? 'manga' : 'anime',
             'relation_type' => AnimeLabels::relation($edge['relationType'] ?? null),
             'title' => $this->displayTitle(Arr::get($edge, 'node.title', [])),
-            'cover_image' => $this->cacheImage(Arr::get($edge, 'node.coverImage.large'), "{$folder}/relations"),
+            'cover_image' => null,
             'format' => AnimeLabels::format(Arr::get($edge, 'node.format')),
             'status' => AnimeLabels::status(Arr::get($edge, 'node.status')),
         ])->filter(fn (array $relation): bool => filled($relation['title']))->values()->all();
@@ -313,19 +345,27 @@ class ExternalMediaService
                 'id' => $rec['id'] ?? null,
                 'type' => ($rec['type'] ?? null) === 'MANGA' ? 'manga' : 'anime',
                 'title' => $this->displayTitle($rec['title'] ?? []),
-                'cover_image' => $this->cacheImage(Arr::get($rec, 'coverImage.large'), "{$folder}/recommendations"),
+                'cover_image' => null,
                 'format' => AnimeLabels::format($rec['format'] ?? null),
                 'average_score' => $rec['averageScore'] ?? null,
             ])->filter(fn (array $rec): bool => filled($rec['title']))->values()->all();
 
-        return [
+        $payload = [
             'title' => $this->displayTitle($item['title'] ?? []),
             'title_english' => Arr::get($item, 'title.english'),
             'title_native' => Arr::get($item, 'title.native'),
             'description' => $item['description'] ?? null,
-            'cover_image' => $this->cacheImage($coverOriginal, "{$folder}/covers"),
+            'cover_image' => $this->cacheImage(
+                $coverOriginal,
+                $type === 'manga' ? 'manga-cover' : 'anime-cover',
+                'media:'.$type.':'.$id
+            ),
             'cover_image_original' => $coverOriginal,
-            'banner_image' => $this->cacheImage($bannerOriginal, "{$folder}/banners"),
+            'banner_image' => $this->cacheImage(
+                $bannerOriginal,
+                $type === 'manga' ? 'manga-banner' : 'anime-banner',
+                'media:'.$type.':'.$id
+            ),
             'banner_image_original' => $bannerOriginal,
             'format' => AnimeLabels::format($item['format'] ?? null),
             'status' => AnimeLabels::status($item['status'] ?? null),
@@ -375,13 +415,13 @@ class ExternalMediaService
                 'url' => $link['url'] ?? null,
                 'type' => $link['type'] ?? null,
                 'language' => $link['language'] ?? null,
-                'icon' => $this->cacheImage($link['icon'] ?? null, "{$folder}/external-links"),
+                'icon' => null,
             ])->filter(fn ($link) => filled($link['url']))->values()->all(),
             'streaming_episodes' => collect($item['streamingEpisodes'] ?? [])->map(fn (array $episode): array => [
                 'title' => $episode['title'] ?? null,
                 'url' => $episode['url'] ?? null,
                 'site' => $episode['site'] ?? null,
-                'thumbnail' => $this->cacheImage($episode['thumbnail'] ?? null, "{$folder}/streaming"),
+                'thumbnail' => null,
             ])->filter(fn ($episode) => filled($episode['url']))->values()->all(),
             'trailer' => Arr::get($item, 'trailer.id') ? $item['trailer'] : null,
             'next_airing_episode' => $item['nextAiringEpisode'] ?? null,
@@ -389,6 +429,38 @@ class ExternalMediaService
             'raw_payload' => $item,
             'is_adult' => $item['isAdult'] ?? false,
         ];
+
+        $totalMs = (microtime(true) - $totalStartedAt) * 1000;
+
+        Log::channel('import')->info(
+            'AniList performans ölçümü.',
+            [
+                'type' => $type,
+                'external_id' => $id,
+                'total_ms' => round($totalMs, 2),
+                'graphql_ms' => round($graphqlMs, 2),
+                'other_ms' => round(
+                    max(
+                        0,
+                        $totalMs
+                        - $graphqlMs
+                        - $this->imageMetrics['download_ms']
+                    ),
+                    2
+                ),
+                'image_calls' => $this->imageMetrics['calls'],
+                'cache_hits' => $this->imageMetrics['cache_hits'],
+                'downloads' => $this->imageMetrics['downloads'],
+                'download_failures' => $this->imageMetrics['failures'],
+                'image_download_ms' => round(
+                    $this->imageMetrics['download_ms'],
+                    2
+                ),
+                'download_bytes' => $this->imageMetrics['download_bytes'],
+            ]
+        );
+
+        return $payload;
     }
 
     private function searchQuery(): string
@@ -539,28 +611,176 @@ class ExternalMediaService
 
         return $response->json('data', []);
     }
-    private function cacheImage(?string $url, string $folder): ?string
-    {
-        if (blank($url)) {
+    public function localizeImage(
+        ?string $url,
+        string $category,
+        string $identity
+    ): ?string {
+        return $this->cacheImage($url, $category, $identity);
+    }
+
+    private function cacheImage(
+        ?string $url,
+        string $category,
+        string $identity
+    ): ?string {
+        $this->imageMetrics['calls']++;
+
+        if (blank($url) || blank($category) || blank($identity)) {
             return null;
         }
 
         try {
-            $path = parse_url($url, PHP_URL_PATH) ?: '';
-            $extension = pathinfo($path, PATHINFO_EXTENSION) ?: 'jpg';
-            $filename = Str::slug(pathinfo($path, PATHINFO_FILENAME) ?: md5($url)).'-'.substr(md5($url), 0, 8).'.'.$extension;
-            $storagePath = trim($folder, '/').'/'.$filename;
+            $safeCategory = Str::slug($category);
 
-            if (! Storage::disk('public')->exists($storagePath)) {
-                $response = $this->http()->timeout(20)->get($url);
-                if ($response->ok()) {
-                    Storage::disk('public')->put($storagePath, $response->body());
-                }
+            if (blank($safeCategory)) {
+                return null;
             }
 
+            $urlPath = parse_url($url, PHP_URL_PATH) ?: '';
+            $extension = strtolower(
+                pathinfo($urlPath, PATHINFO_EXTENSION) ?: 'jpg'
+            );
+
+            if (! in_array(
+                $extension,
+                ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+                true
+            )) {
+                $extension = 'jpg';
+            }
+
+            /*
+             * Dosya anahtarı üç ayrı bileşenden oluşur:
+             *
+             * 1. Kategori
+             * 2. AniList varlık kimliği
+             * 3. Kaynak görsel URL'si
+             *
+             * Aynı varlık ve aynı URL tekrar gelirse mevcut dosya kullanılır.
+             * Farklı kategori veya farklı varlık kimliği kesinlikle ayrı
+             * dosya yolu oluşturur.
+             */
+            $identityHash = hash(
+                'sha256',
+                $safeCategory.'|'.$identity
+            );
+
+            $urlHash = hash('sha256', $url);
+
+            $storagePath = 'media-cache/'
+                .$safeCategory
+                .'/'
+                .substr($identityHash, 0, 2)
+                .'/'
+                .$identityHash
+                .'-'
+                .$urlHash
+                .'.'
+                .$extension;
+
+            $disk = Storage::disk('public');
+
+            if (
+                $disk->exists($storagePath)
+                && $disk->size($storagePath) >= 512
+            ) {
+                $this->imageMetrics['cache_hits']++;
+
+                return Storage::url($storagePath);
+            }
+
+            if ($disk->exists($storagePath)) {
+                $disk->delete($storagePath);
+            }
+
+            $downloadStartedAt = microtime(true);
+
+            $response = $this->http()
+                ->connectTimeout(5)
+                ->timeout(15)
+                ->retry(2, 750, throw: false)
+                ->get($url);
+
+            $this->imageMetrics['download_ms'] +=
+                (microtime(true) - $downloadStartedAt) * 1000;
+
+            if (! $response->ok()) {
+                $this->imageMetrics['failures']++;
+                Log::channel('import')->warning(
+                    'Görsel indirilemedi.',
+                    [
+                        'category' => $safeCategory,
+                        'identity' => $identity,
+                        'http_status' => $response->status(),
+                    ]
+                );
+
+                return null;
+            }
+
+            $body = $response->body();
+            $contentType = strtolower(
+                (string) $response->header('Content-Type')
+            );
+
+            if (
+                ! str_starts_with($contentType, 'image/')
+                || strlen($body) < 512
+            ) {
+                $this->imageMetrics['failures']++;
+                Log::channel('import')->warning(
+                    'Geçersiz görsel yanıtı alındı.',
+                    [
+                        'category' => $safeCategory,
+                        'identity' => $identity,
+                        'content_type' => $contentType,
+                        'size' => strlen($body),
+                    ]
+                );
+
+                return null;
+            }
+
+            $temporaryPath = $storagePath
+                .'.tmp-'
+                .bin2hex(random_bytes(6));
+
+            $disk->put($temporaryPath, $body);
+
+            if (
+                ! $disk->exists($temporaryPath)
+                || $disk->size($temporaryPath) < 512
+            ) {
+                $this->imageMetrics['failures']++;
+                $disk->delete($temporaryPath);
+
+                return null;
+            }
+
+            if ($disk->exists($storagePath)) {
+                $disk->delete($storagePath);
+            }
+
+            $disk->move($temporaryPath, $storagePath);
+
+            $this->imageMetrics['downloads']++;
+            $this->imageMetrics['download_bytes'] += strlen($body);
+
             return Storage::url($storagePath);
-        } catch (\Throwable) {
-            return $url;
+        } catch (\Throwable $exception) {
+            $this->imageMetrics['failures']++;
+
+            Log::channel('import')->warning(
+                'Görsel yerelleştirilemedi.',
+                [
+                    'category' => $category,
+                    'identity' => $identity,
+                    'error' => $exception->getMessage(),
+                ]
+            );
+
+            return null;
         }
     }
 
