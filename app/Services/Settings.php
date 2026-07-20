@@ -23,6 +23,7 @@ class Settings
         return [
             'site_name' => $this->get('site_name', 'nozu.me'),
             'site_description' => $this->get('site_description', 'nozu.me, Türkçe anime ve manga keşif veritabanıdır.'),
+            'chrome_extension_url' => $this->get('chrome_extension_url'),
             'logo_path' => $this->get('logo_path'),
             'favicon_path' => $this->get('favicon_path'),
             'translation_provider' => $this->get('translation_provider', config('services.translation.provider', 'azure')),

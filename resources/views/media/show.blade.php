@@ -53,6 +53,13 @@
     <div class="content-layout nozu-detail">
         <aside class="side-panel">
             <div class="detail-action-card">
+                @if($media->turkish_purchase_url)
+                    <a class="purchase-button" href="{{ $media->turkish_purchase_url }}" target="_blank" rel="noopener">
+                        <i class="fa-solid fa-cart-shopping"></i>
+                        <span>Türkçe satın al</span>
+                    </a>
+                @endif
+
                 @auth
                     <form class="media-list-form panel-list-form" method="post" action="{{ route('media.list', $media) }}">
                         @csrf
@@ -61,6 +68,7 @@
                             <option value="watching" @selected($listStatus === 'watching')>İzliyor</option>
                             <option value="reading" @selected($listStatus === 'reading')>Okuyor</option>
                             <option value="completed" @selected($listStatus === 'completed')>Tamamladı</option>
+                            <option value="paused" @selected($listStatus === 'paused')>Duraklatıldı</option>
                             <option value="dropped" @selected($listStatus === 'dropped')>Bıraktı</option>
                             <option value="planned" @selected($listStatus === 'planned')>Planlıyor</option>
                         </select>

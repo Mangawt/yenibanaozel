@@ -33,6 +33,8 @@
                     <input name="title_native" value="{{ old('title_native', $media->title_native) }}">
                     <label>Turkce ozet</label>
                     <textarea name="description" rows="12">{{ old('description', $media->description) }}</textarea>
+                    <label>Türkçe satın alma linki</label>
+                    <input name="turkish_purchase_url" value="{{ old('turkish_purchase_url', $media->turkish_purchase_url) }}" placeholder="https://...">
                 </div>
 
                 <div class="panel">

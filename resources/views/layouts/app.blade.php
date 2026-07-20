@@ -41,6 +41,9 @@
             <span>N</span>
         @endif
     </a>
+    <button class="mobile-menu-toggle" type="button" aria-label="Menüyü aç" aria-expanded="false">
+        <i class="fa-solid fa-bars"></i>
+    </button>
     <nav class="main-nav">
         <a href="{{ route('home') }}">Keşfet</a>
         <a href="{{ route('search', ['type' => 'anime']) }}">Anime</a>
@@ -56,7 +59,7 @@
     </form>
     <div class="header-actions">
         <button class="theme-toggle" type="button" aria-label="Tema seçimi" title="Tema">
-            <span data-theme-icon>☾</span>
+            <span data-theme-icon><i class="fa-solid fa-moon"></i></span>
         </button>
         @auth
             <div class="user-menu">
@@ -96,6 +99,17 @@
         <div class="footer-brand">
             <strong>{{ $settings['site_name'] ?? 'nozu.me' }}</strong>
             <p>{{ $settings['site_description'] ?? 'Türk kullanıcılar için hazırlanmış anime ve manga keşif veritabanı.' }}</p>
+            @if(! empty($settings['chrome_extension_url']))
+                <a class="chrome-extension-card" href="{{ $settings['chrome_extension_url'] }}" target="_blank" rel="noopener">
+                    <i class="fa-brands fa-chrome"></i>
+                    <span>Chrome eklentisi</span>
+                </a>
+            @else
+                <span class="chrome-extension-card is-disabled">
+                    <i class="fa-brands fa-chrome"></i>
+                    <span>Chrome eklentisi yakında</span>
+                </span>
+            @endif
         </div>
         <nav class="footer-links" aria-label="Alt menü">
             <a href="{{ route('search', ['type' => 'anime']) }}">Anime</a>
@@ -118,12 +132,16 @@
     const themeButton = document.querySelector('.theme-toggle');
     const themeIcon = document.querySelector('[data-theme-icon]');
     const themes = ['dark', 'light', 'system'];
-    const icons = {dark: '☾', light: '☀', system: '◐'};
+    const icons = {
+        dark: '<i class="fa-solid fa-moon"></i>',
+        light: '<i class="fa-solid fa-sun"></i>',
+        system: '<i class="fa-solid fa-desktop"></i>'
+    };
     const labels = {dark: 'Karanlık tema', light: 'Aydınlık tema', system: 'Sistem teması'};
     const applyTheme = (theme) => {
         document.documentElement.dataset.theme = theme;
         localStorage.setItem('nozu-theme', theme);
-        if (themeIcon) themeIcon.textContent = icons[theme] || icons.system;
+        if (themeIcon) themeIcon.innerHTML = icons[theme] || icons.system;
         if (themeButton) {
             themeButton.title = labels[theme] || labels.system;
             themeButton.setAttribute('aria-label', labels[theme] || labels.system);
@@ -134,6 +152,16 @@
         themeButton.addEventListener('click', () => {
             const current = document.documentElement.dataset.theme || 'system';
             applyTheme(themes[(themes.indexOf(current) + 1) % themes.length]);
+        });
+    }
+
+    const mobileToggle = document.querySelector('.mobile-menu-toggle');
+    const siteHeader = document.querySelector('.site-header');
+    if (mobileToggle && siteHeader) {
+        mobileToggle.addEventListener('click', () => {
+            const open = siteHeader.classList.toggle('menu-open');
+            mobileToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            mobileToggle.innerHTML = open ? '<i class="fa-solid fa-xmark"></i>' : '<i class="fa-solid fa-bars"></i>';
         });
     }
 

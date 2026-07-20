@@ -39,7 +39,7 @@ class SocialController extends Controller
     public function updateMediaList(Media $media, Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'status' => ['required', 'in:watching,reading,completed,dropped,planned'],
+            'status' => ['required', 'in:watching,reading,completed,paused,dropped,planned'],
         ]);
 
         MediaList::query()

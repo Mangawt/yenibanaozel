@@ -675,3 +675,81 @@ nav a:hover{background:var(--secondary);color:var(--foreground)}
   .panel-save-button{flex:1}
   .pretty-tabs{width:100%;border-radius:0;margin-bottom:22px}
 }
+
+.mobile-menu-toggle{display:none}
+.chrome-extension-card{display:inline-flex;width:max-content;align-items:center;gap:10px;margin-top:14px;border:1px solid color-mix(in srgb,var(--primary) 34%,var(--border));border-radius:12px;background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 15%,var(--card)),color-mix(in srgb,var(--turquoise) 9%,var(--card)));padding:10px 13px;color:var(--foreground);font-weight:900}
+.chrome-extension-card i{font-size:18px;color:var(--turquoise)}
+.chrome-extension-card.is-disabled{opacity:.72}
+.purchase-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:44px;border:1px solid color-mix(in srgb,var(--turquoise) 44%,var(--border));border-radius:12px;background:linear-gradient(135deg,color-mix(in srgb,var(--turquoise) 22%,var(--card)),color-mix(in srgb,var(--primary) 10%,var(--card)));color:var(--foreground);font-size:14px;font-weight:900}
+.purchase-button i{color:var(--turquoise)}
+.home-slider{isolation:isolate;border-radius:22px;min-height:410px;background:linear-gradient(135deg,var(--card),var(--background));box-shadow:0 22px 70px rgba(0,0,0,.34)}
+.home-slider:after{content:"";position:absolute;left:28px;right:28px;bottom:20px;z-index:3;height:3px;border-radius:999px;background:linear-gradient(90deg,var(--primary),var(--turquoise));opacity:.8}
+.slide{padding:42px}
+.slide:before{background:linear-gradient(90deg,color-mix(in srgb,var(--background) 96%,transparent),color-mix(in srgb,var(--background) 58%,transparent) 56%,color-mix(in srgb,var(--background) 12%,transparent)),linear-gradient(0deg,color-mix(in srgb,var(--background) 88%,transparent),transparent)}
+.slide-copy{display:grid;gap:10px;max-width:720px}
+.slide-copy span{width:max-content;border:1px solid color-mix(in srgb,var(--primary) 38%,var(--border));border-radius:999px;background:color-mix(in srgb,var(--primary) 13%,var(--card));padding:7px 11px}
+.slide-copy h1{max-width:760px;font-size:clamp(34px,5vw,64px);letter-spacing:0;text-wrap:balance}
+.slide-copy .button{width:max-content}
+
+:root[data-theme="light"] .slide:before{background:linear-gradient(90deg,rgba(255,255,255,.94),rgba(255,255,255,.66) 58%,rgba(255,255,255,.22)),linear-gradient(0deg,rgba(246,247,251,.9),transparent)}
+@media (prefers-color-scheme:light){:root[data-theme="system"] .slide:before{background:linear-gradient(90deg,rgba(255,255,255,.94),rgba(255,255,255,.66) 58%,rgba(255,255,255,.22)),linear-gradient(0deg,rgba(246,247,251,.9),transparent)}}
+:root[data-theme="light"] .detail-hero:after{background:linear-gradient(90deg,rgba(246,247,251,.84),rgba(246,247,251,.42) 58%,rgba(246,247,251,.2)),linear-gradient(to top,rgba(246,247,251,.96),transparent)}
+:root[data-theme="light"] .admin-sidebar{background:rgba(255,255,255,.86)}
+:root[data-theme="light"] .queue-row{background:rgba(17,24,39,.03)}
+:root[data-theme="light"] .panel-list-form,
+:root[data-theme="light"] .detail-action-card,
+:root[data-theme="light"] .library-share-card{box-shadow:0 16px 38px rgba(15,23,42,.08)!important}
+
+@media (max-width:820px){
+  .site-header{display:grid;height:auto;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:10px 14px}
+  .brand{grid-column:1}
+  .mobile-menu-toggle{display:grid;grid-column:2;justify-self:start;width:40px;height:40px;padding:0;border-radius:12px}
+  .header-actions{grid-column:3;justify-self:end}
+  .quick-search{grid-column:1/-1;grid-row:2;margin-left:0;max-width:none;width:100%;order:0}
+  .quick-search input{height:42px}
+  .quick-search kbd{display:none!important}
+  .main-nav{grid-column:1/-1;display:none;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%;border:1px solid var(--border);border-radius:16px;background:var(--glass-card-strong);padding:10px}
+  .site-header.menu-open .main-nav{display:grid}
+  .main-nav a{border-radius:11px;background:var(--secondary);padding:12px 13px;text-align:center}
+  .main-nav a:first-child:after{display:none}
+  .page{padding:18px 12px 44px}
+  .footer-main{display:grid;gap:18px}
+  .footer-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));justify-content:stretch;max-width:none}
+  .footer-links a{border:1px solid var(--border);border-radius:10px;background:var(--card);padding:10px}
+  .home-slider{min-height:360px;border-radius:18px}
+  .slide{padding:24px}
+  .slide-copy h1{font-size:clamp(28px,9vw,42px)}
+  .slide-copy p{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:3}
+  .detail-tabs{overflow-x:auto;justify-content:flex-start;gap:8px;padding:12px;scrollbar-width:none}
+  .detail-tabs::-webkit-scrollbar{display:none}
+  .pretty-tabs a{white-space:nowrap}
+  .content-layout{gap:18px}
+  .character-card.split{grid-template-columns:48px minmax(0,1fr);align-items:start}
+  .character-card.split .voice{text-align:left}
+  .character-card.split img:last-child{display:none}
+  .profile-dashboard{gap:14px}
+  .tiny-cards{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .tiny-cards .media-card{width:100%;min-width:0}
+  .more-favorites-card{min-height:112px}
+}
+
+@media (max-width:520px){
+  .site-header{grid-template-columns:auto auto 1fr}
+  .brand img{max-width:110px}
+  .header-actions{gap:8px}
+  .theme-toggle,.avatar-link{width:38px;height:38px}
+  .button.ghost{padding:8px 10px;font-size:13px}
+  .main-nav{grid-template-columns:1fr}
+  .home-five{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+  .poster-grid{gap:20px 14px}
+  .detail-shell{display:grid;grid-template-columns:94px minmax(0,1fr);gap:14px}
+  .detail-poster{width:94px!important;min-width:94px!important}
+  .detail-copy h1{font-size:clamp(22px,8vw,31px)}
+  .badge-row span{font-size:11px}
+  .detail-action-card{padding:10px}
+  .panel-save-button,.panel-remove-button,.purchase-button{width:100%}
+  .footer-bottom{display:grid}
+  .tiny-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .bookshelf-row{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .profile-v2{padding:22px}
+}

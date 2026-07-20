@@ -255,6 +255,7 @@ class AdminController extends Controller
             'raw' => [
                 'site_name' => $settings->get('site_name', 'nozu.me'),
                 'site_description' => $settings->get('site_description', 'nozu.me, Türkçe anime ve manga keşif veritabanıdır.'),
+                'chrome_extension_url' => $settings->get('chrome_extension_url'),
                 'favicon_path' => $settings->get('favicon_path'),
                 'deepl_api_key' => $settings->get('deepl_api_key'),
                 'google_translate_api_key' => $settings->get('google_translate_api_key'),
@@ -338,6 +339,7 @@ class AdminController extends Controller
         $validated = $request->validate([
             'site_name' => ['required', 'string', 'max:80'],
             'site_description' => ['nullable', 'string', 'max:240'],
+            'chrome_extension_url' => ['nullable', 'url', 'max:500'],
             'logo' => ['nullable', 'image', 'max:2048'],
             'favicon' => ['nullable', 'image', 'max:512'],
             'translation_provider' => ['required', 'in:azure,deepl,google,gemini,none'],
@@ -439,7 +441,9 @@ class AdminController extends Controller
                     return [$name => []];
                 }
 
-                $lines = collect(preg_split('/\R/', File::get($path)) ?: [])
+                $content = rescue(fn (): string => File::get($path), '', report: false);
+
+                $lines = collect(preg_split('/\R/', $content) ?: [])
                     ->filter()
                     ->take(-40)
                     ->values()

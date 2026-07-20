@@ -3,6 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -22,6 +23,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.write' => \App\Http\Middleware\AdminWrite::class,
             'api.log' => \App\Http\Middleware\ApiRequestLogger::class,
             'api.public_limit' => \App\Http\Middleware\PublicApiRateLimit::class,
+            'extension.ability' => \App\Http\Middleware\EnsureExtensionTokenAbility::class,
+            'extension.limit' => \App\Http\Middleware\ExtensionRateLimit::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -35,6 +38,14 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return \App\Support\ApiResponder::error('Parametreler geçersiz.', $exception->errors(), 422);
+        });
+
+        $exceptions->render(function (AuthenticationException $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return \App\Support\ApiResponder::error('Oturum doğrulaması gerekli.', [], 401);
         });
 
         $exceptions->render(function (NotFoundHttpException $exception, Request $request) {

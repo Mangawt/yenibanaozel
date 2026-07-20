@@ -24,6 +24,8 @@
                     <input name="site_name" value="{{ old('site_name', $raw['site_name']) }}" required>
                     <label>Site açıklaması</label>
                     <textarea name="site_description" rows="3" maxlength="240">{{ old('site_description', $raw['site_description']) }}</textarea>
+                    <label>Chrome eklentisi linki</label>
+                    <input name="chrome_extension_url" value="{{ old('chrome_extension_url', $raw['chrome_extension_url']) }}" placeholder="https://chromewebstore.google.com/...">
                     <label>Logo</label>
                     <input type="file" name="logo" accept="image/*">
                     <label>Favicon</label>

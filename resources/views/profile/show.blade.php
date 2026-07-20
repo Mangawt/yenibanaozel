@@ -6,6 +6,7 @@
             'favorite' => 'Favorilere ekledi',
             'watching' => 'İzliyor',
             'reading' => 'Okuyor',
+            'paused' => 'Duraklatıldı',
             'completed' => 'Tamamladı',
             'dropped' => 'Bıraktı',
             'planned' => 'Planlıyor',

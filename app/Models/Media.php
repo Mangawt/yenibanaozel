@@ -41,6 +41,7 @@ class Media extends Model
         'source',
         'hashtag',
         'site_url',
+        'turkish_purchase_url',
         'season',
         'season_year',
         'start_year',

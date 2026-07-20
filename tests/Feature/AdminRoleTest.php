@@ -33,6 +33,13 @@ class AdminRoleTest extends TestCase
             ->assertOk();
     }
 
+    public function test_admin_can_access_system_status_page(): void
+    {
+        $this->actingAs($this->user('admin'))
+            ->get('/admin/status')
+            ->assertOk();
+    }
+
     public function test_user_cannot_view_admin_or_write(): void
     {
         $media = Media::query()->create([

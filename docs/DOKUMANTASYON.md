@@ -8,7 +8,7 @@ Local geliştirme kurulumu:
 
 ```bash
 composer install
-npm install
+npm ci
 npm run build
 php artisan migrate
 php artisan storage:link
@@ -35,6 +35,8 @@ Ana bileşenler:
 - DeepL/Google/Gemini destekli otomatik çeviri
 - Normalize katalog tabloları: people, characters, studios
 - Ücretsiz public Nozu API
+- Chrome eklentisi için Sanctum tabanlı kullanıcı API'si
+- Opsiyonel Türkçe satın alma linkleri
 
 ## Ortam Ayarları
 
@@ -57,6 +59,9 @@ DB_PASSWORD=...
 
 QUEUE_CONNECTION=database
 DB_QUEUE_RETRY_AFTER=900
+
+NOZU_EXTENSION_ORIGIN=chrome-extension://EXTENSION_ID
+SANCTUM_STATEFUL_DOMAINS=localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,nozu.me
 ```
 
 Local geliştirmede `APP_URL=http://127.0.0.1:8000` kalabilir. API dokümanı ve OpenAPI çıktısı ise `NOZU_PUBLIC_URL` / `NOZU_PUBLIC_API_URL` değerlerinden üretilir; bu yüzden local çalışırken bile public API örnekleri canlı domaini gösterir. Production ortamında `APP_URL`, `NOZU_PUBLIC_URL` ve `NOZU_PUBLIC_API_URL` canlı domainle ayarlanmalıdır.
@@ -94,7 +99,9 @@ Panelde:
 - Sistem durumu ve log izleme
 - Site ayarları
 - Logo, favicon, site açıklaması
+- Chrome eklentisi footer linki
 - Çeviri sağlayıcı ayarları
+- Anime/manga düzenleme ekranında Türkçe satın alma linki
 
 bulunur.
 
@@ -316,7 +323,7 @@ Public API dokümantasyonu:
 /api
 ```
 
-Tüm `/api/v1/*` endpointleri ücretsiz ve anahtarsız kullanılabilir. API key, başvuru veya plan seçimi gerekmez.
+Public katalog endpointleri ücretsiz ve anahtarsızdır. Kullanıcıya özel auth ve `/me` endpointleri Sanctum Bearer token gerektirir.
 
 Public API rate limit:
 
@@ -369,6 +376,168 @@ Hata response formatı:
 Liste endpointlerinde pagination bilgileri `meta` ve `links` içinde döner. `fields` parametresi minimal response, `include` parametresi ilişkili veri seçimi için kullanılabilir.
 
 API response'larında HTTP cache için `ETag`, `Last-Modified` ve `Cache-Control` headerları üretilir.
+
+### Chrome Eklentisi Kullanıcı API'si
+
+Chrome eklentisinin nozu.me hesabıyla güvenli giriş yapabilmesi için Sanctum tabanlı kullanıcı API'si vardır. Bu API mevcut public endpointleri bozmaz ve yine `/api/v1` altında çalışır.
+
+Kimlik doğrulama:
+
+- Laravel Sanctum kullanılır.
+- Tokenlar veritabanında düz metin saklanmaz.
+- Kullanıcı tokenı `Authorization: Bearer {TOKEN}` headerı ile gönderilir.
+- Login endpointinde IP ve e-posta hash'i + IP bazlı rate limit uygulanır.
+- Hatalı girişlerde genel mesaj döner; parola veya token loglanmaz.
+- Token ve kullanıcıya özel cevaplarda HTTP cache kapalıdır: `Cache-Control: no-store, private`.
+- Token süresi 30 gündür. `.env` tarafında `SANCTUM_TOKEN_EXPIRATION=43200` dakika olarak tutulur.
+- Token yalnızca başarılı login sırasında bir kez plain text döner; daha sonra veritabanında hashli saklanır.
+- Chrome extension tokenlarına yalnızca `extension:read` ve `extension:list-write` ability değerleri verilir.
+
+Ability kuralları:
+
+- `GET /api/v1/me`: `extension:read`
+- `GET /api/v1/me/list`: `extension:read`
+- `GET /api/v1/media/{media}/my-list`: `extension:read`
+- `POST /api/v1/me/list`: `extension:list-write`
+- `DELETE /api/v1/me/list/{media}/{status}`: `extension:list-write`
+- Eski `DELETE /api/v1/me/list/{media}` endpointi geriye uyumluluk için durur; yalnızca favori dışı ana liste durumunu siler ve favoriyi silmez.
+
+Rate limit değerleri:
+
+- Login: IP başına dakikada 10
+- Login: e-posta hash'i + IP başına dakikada 5
+- Authenticated okuma: kullanıcı başına dakikada 120
+- Authenticated okuma: IP başına dakikada 180
+- Liste yazma: kullanıcı başına dakikada 30
+- Liste silme: kullanıcı başına dakikada 10
+
+Chrome extension CORS ayarı `.env` üzerinden dar kapsamlı yapılır:
+
+```env
+NOZU_EXTENSION_ORIGIN=chrome-extension://EXTENSION_ID
+```
+
+Tüm originler `*` ile açılmaz. Gerçek Chrome extension ID production `.env` dosyasına yazılmalıdır.
+
+Endpointler:
+
+```text
+POST   /api/v1/auth/login
+POST   /api/v1/auth/logout
+GET    /api/v1/me
+GET    /api/v1/me/list
+POST   /api/v1/me/list
+DELETE /api/v1/me/list/{media}
+DELETE /api/v1/me/list/{media}/{status}
+GET    /api/v1/media/{media}/my-list
+```
+
+Login örneği:
+
+```json
+{
+  "email": "kullanici@example.com",
+  "password": "sifre",
+  "device_name": "Nozu Chrome Extension"
+}
+```
+
+Başarılı login cevabı:
+
+```json
+{
+  "success": true,
+  "data": {
+    "token": "...",
+    "user": {
+      "id": 1,
+      "name": "Nozu User",
+      "avatar": null
+    }
+  },
+  "meta": {},
+  "links": {}
+}
+```
+
+Liste sorgusu parametreleri:
+
+- `type`: `anime` veya `manga`
+- `status`: `watching`, `reading`, `completed`, `paused`, `dropped`, `planned`, `favorite`
+- `page`
+- `per_page`
+
+Liste oluşturma/güncelleme örneği:
+
+```json
+{
+  "media_id": 123,
+  "status": "watching",
+  "progress": 3,
+  "score": 8
+}
+```
+
+Durum uyumluluğu:
+
+- Anime için ana ilerleme durumu: `watching`
+- Manga için ana ilerleme durumu: `reading`
+- Ortak durumlar: `completed`, `paused`, `dropped`, `planned`, `favorite`
+- `progress` negatif olamaz.
+- `score` 0-10 aralığında olmalıdır.
+- Aynı kullanıcı ve aynı medya için aynı status varsa kayıt güncellenir.
+- Aynı kullanıcı ve aynı medya için `favorite` ile ana izleme/okuma durumu ayrı satırlar olarak birlikte tutulabilir.
+- `favorite` eklemek `watching`, `reading`, `completed`, `paused`, `dropped` veya `planned` kaydını silmez.
+- Ana liste durumu değişirken `favorite` korunur; yalnızca önceki favori dışı ana durum temizlenir.
+- Favori dışındaki liste durumu değiştirildiğinde aynı medya için önceki favori dışı durum temizlenir.
+- API request içinde `user_id` veya `owner_id` kabul edilmez.
+- Liste okuma, yazma ve silme işlemlerinde kullanıcı her zaman Bearer token üzerinden belirlenir.
+
+Status bazlı silme:
+
+```http
+DELETE /api/v1/me/list/123/favorite
+DELETE /api/v1/me/list/123/watching
+```
+
+Bu endpoint yalnızca giriş yapan kullanıcının ilgili `media + status` kaydını siler. Kayıt yoksa idempotent şekilde `200` döner ve `deleted: false` verir.
+
+`my-list` response örneği:
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "watching",
+    "progress": 10,
+    "score": 8,
+    "is_favorite": true
+  },
+  "meta": {},
+  "links": {}
+}
+```
+
+Kullanıcının sadece favorisi varsa `status`, `progress` ve `score` `null`, `is_favorite` ise `true` döner. Kullanıcıya ait hiçbir kayıt yoksa `data: null` döner.
+
+Chrome fetch örneği:
+
+```js
+const response = await fetch('https://nozu.me/api/v1/me/list', {
+  method: 'POST',
+  headers: {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  },
+  body: JSON.stringify({
+    media_id: 123,
+    status: 'watching',
+    progress: 3,
+    score: 8
+  })
+});
+```
 
 ## Çeviri
 
@@ -470,6 +639,39 @@ $item['image'] = $external->localizeImage(...)
     ?? ($item['image'] ?? null);
 ```
 
+## Site Tasarımı ve İçerik Yönetimi
+
+Public arayüz karanlık tema varsayılan olacak şekilde tasarlanmıştır. Kullanıcı tema seçimleri `localStorage` içinde saklanır ve üç mod desteklenir:
+
+- Karanlık tema
+- Aydınlık tema
+- Sistem temasını kullan
+
+Mobil arayüzde ana menü küçük ekranlarda açılır menüye dönüşür. Arama alanı, profil menüsü ve tema butonu mobilde ayrı satır/hizalama kurallarıyla taşma yapmayacak şekilde düzenlenmiştir. Anime/manga detay sekmeleri mobilde yatay kaydırılabilir çalışır.
+
+Ana sayfa sliderı modern geniş görsel yapısıyla çalışır. Slider görselleri medya `banner_image` alanından, yoksa `cover_image` alanından beslenir. Kart gridleri desktopta 6 seri gösterecek, mobilde ise taşmadan 2 kolon kullanılacak şekilde ayarlanmıştır.
+
+Favori anime ve favori manga alanlarında kartlar küçük grid yapısıyla gösterilir. Kartlar üst üste binmez; fazla favori olduğunda profil sayfasındaki `Tümünü gör` kartı kullanılır.
+
+Türkçe satın alma linki:
+
+- `media.turkish_purchase_url` alanında saklanır.
+- Admin panelindeki anime/manga düzenleme ekranından girilir.
+- Public detay sayfasında link doluysa alışveriş ikonlu `Türkçe satın al` butonu görünür.
+- Link boşsa kullanıcı tarafında satın alma butonu gösterilmez.
+
+Chrome eklentisi footer kutusu:
+
+- Admin ayarlarındaki `chrome_extension_url` alanından yönetilir.
+- Link girilmişse footer açıklamasının altında Chrome ikonlu kutu olarak görünür.
+- Link girilmemişse pasif `Chrome eklentisi yakında` kutusu görünür.
+
+Admin Sistem Durumu ekranı:
+
+- `/admin/status` adresindedir.
+- Queue, failed jobs, batch ve son logları gösterir.
+- Log dosyası okunamazsa veya bozuksa sayfa 500 hatasına düşmez; ilgili log alanı boş gösterilir.
+
 ## Katalog Senkronizasyonu
 
 Yeni import edilen her medya kaydı `people`, `characters`, `studios` ve bağlantı tablolarına otomatik senkronize edilir.
@@ -504,7 +706,7 @@ chown -R www-data:www-data storage bootstrap/cache
 find storage bootstrap/cache -type d -exec chmod 775 {} \;
 find storage bootstrap/cache -type f -exec chmod 664 {} \;
 composer install --no-dev --optimize-autoloader
-npm install
+npm ci
 npm run build
 sudo -u www-data php artisan migrate --force
 sudo -u www-data php artisan storage:link
@@ -514,7 +716,8 @@ sudo -u www-data php artisan route:cache
 sudo -u www-data php artisan view:cache
 chown -R www-data:www-data storage bootstrap/cache
 sudo -u www-data php artisan nozume:import-queue
-sudo -u www-data php artisan nozume:sync-resume
+# Smart Sync kaldığı yerden devam ettirilecekse çalıştırılır:
+# sudo -u www-data php artisan nozume:sync-resume
 sudo -u www-data php artisan queue:restart
 ```
 
@@ -599,3 +802,12 @@ Test kapsamı şunları içerir:
 - Bunny 4xx/5xx veya exception durumunda `null` döner ve API anahtarı loglanmaz
 - Bunny başarısız olduğunda `ExternalMediaService` yerel `media-cache` fallback kullanır
 - Bunny kapalıyken mevcut yerel görsel cache davranışı bozulmaz
+- Chrome eklentisi API login başarılı token döndürür
+- Hatalı Chrome API login genel güvenli hata mesajı döndürür
+- Token olmadan `/api/v1/me` erişimi 401 döner
+- Kullanıcı kendi anime/manga liste kaydını oluşturabilir
+- Kullanıcı kendi liste kaydını güncelleyebilir
+- Kullanıcı başka kullanıcının liste durumunu göremez
+- Logout sonrası mevcut Sanctum tokenı geçersiz olur
+- Chrome API validation hataları standart JSON formatıyla döner
+- Admin Sistem Durumu sayfası admin kullanıcıyla 500 vermeden açılır

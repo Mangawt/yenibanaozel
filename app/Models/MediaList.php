@@ -7,7 +7,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MediaList extends Model
 {
-    protected $fillable = ['user_id', 'media_id', 'status'];
+    protected $fillable = ['user_id', 'media_id', 'status', 'progress', 'score'];
+
+    protected $casts = [
+        'progress' => 'integer',
+        'score' => 'integer',
+    ];
 
     public function user(): BelongsTo
     {
