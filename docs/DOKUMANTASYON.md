@@ -56,7 +56,7 @@ DB_USERNAME=...
 DB_PASSWORD=...
 
 QUEUE_CONNECTION=database
-DB_QUEUE_RETRY_AFTER=360
+DB_QUEUE_RETRY_AFTER=900
 ```
 
 Local geliştirmede `APP_URL=http://127.0.0.1:8000` kalabilir. API dokümanı ve OpenAPI çıktısı ise `NOZU_PUBLIC_URL` / `NOZU_PUBLIC_API_URL` değerlerinden üretilir; bu yüzden local çalışırken bile public API örnekleri canlı domaini gösterir. Production ortamında `APP_URL`, `NOZU_PUBLIC_URL` ve `NOZU_PUBLIC_API_URL` canlı domainle ayarlanmalıdır.
@@ -202,6 +202,7 @@ Supervisor örneğinde iki program hazırdır:
 
 - `nozu-import`
 - `nozu-scanner`
+- `nozu-images`
 
 ## Smart Sync
 
@@ -401,6 +402,74 @@ Authorization: DeepL-Auth-Key {API_KEY}
 
 Çeviri servis anahtarları loglanmaz. Çeviri öncesinde HTML etiketleri silinmez; destekleyen sağlayıcılarda HTML formatı korunarak gönderilir.
 
+## Görsel Depolama ve Bunny CDN
+
+Nozu görsel cache sistemi iki katmanlı çalışır:
+
+- Yerel fallback: `storage/app/public/media-cache`
+- Eski seri bazlı görseller: `storage/app/public/media`
+- Opsiyonel CDN katmanı: Bunny Storage + Bunny CDN
+
+Eski görseller taşınmaz. `storage/app/public/media`, mevcut `storage/app/public/media-cache` dosyaları, eski `/storage/media/` URL'leri ve veritabanındaki eski görsel alanları toplu migration ile değiştirilmez. Bunny entegrasyonu yalnızca entegrasyon aktif edildikten sonra `ExternalMediaService::cacheImage()` / `localizeImage()` üzerinden işlenen yeni görseller için devreye girer.
+
+Production `.env` ayarları:
+
+```env
+BUNNY_ENABLED=true
+BUNNY_STORAGE_ZONE=nozu-media
+BUNNY_STORAGE_KEY=SUNUCUDA_ELLE_EKLE
+BUNNY_STORAGE_ENDPOINT=https://storage.bunnycdn.com
+BUNNY_CDN_URL=https://nozu-media.b-cdn.net
+```
+
+`BUNNY_STORAGE_KEY` değeri kaynak koda, teste, loga, dokümana veya `.env.example` içine yazılmaz. Anahtar yalnızca production sunucusundaki `.env` dosyasına elle eklenir.
+
+Bunny kapalıyken:
+
+- Mevcut yerel `media-cache` davranışı aynen çalışır.
+- Yerel dosya varsa ve 512 byte veya daha büyükse `/storage/media-cache/...` URL'si döner.
+- Yeni dosya indirildikten sonra yerel cache'e atomik geçici dosya + move akışıyla yazılır.
+
+Bunny açıkken:
+
+1. Kaynak görsel URL'si indirilir.
+2. HTTP status başarılı olmalıdır.
+3. `Content-Type` `image/` ile başlamalıdır.
+4. İçerik en az 512 byte olmalıdır.
+5. Mevcut deterministik path korunur: `media-cache/{kategori}/{hash-prefix}/{identityHash-urlHash}.{ext}`.
+6. Doğrulanan içerik Bunny Storage'a HTTP `PUT` ile yüklenir.
+7. Bunny başarılıysa veritabanına `{BUNNY_CDN_URL}/{PATH}` formatında CDN URL'si kaydedilir.
+8. Bunny başarısızsa import veya queue job başarısız olmaz; mevcut yerel `media-cache` fallback akışı çalışır.
+
+Bunny upload URL formatı:
+
+```text
+{BUNNY_STORAGE_ENDPOINT}/{BUNNY_STORAGE_ZONE}/{PATH}
+```
+
+Path segmentleri URL encode edilir, slash yapısı korunur. Upload headerları:
+
+```http
+AccessKey: BUNNY_STORAGE_KEY
+Content-Type: image/*
+```
+
+Bunny başarısız olduğunda loglarda yalnızca şu bilgiler tutulur:
+
+- `storage_path`
+- HTTP status
+- response body'nin en fazla ilk 500 karakteri
+- exception mesajı
+
+Loglarda `BUNNY_STORAGE_KEY`, `AccessKey` headerı, tam config içeriği veya `.env` içeriği tutulmaz.
+
+Yan görsel işi `CacheMediaImagesJob` mevcut güvenli fallback davranışını korur. Örneğin Bunny veya yerel indirme başarısız olursa mevcut kayıt null yapılmaz:
+
+```php
+$item['image'] = $external->localizeImage(...)
+    ?? ($item['image'] ?? null);
+```
+
 ## Katalog Senkronizasyonu
 
 Yeni import edilen her medya kaydı `people`, `characters`, `studios` ve bağlantı tablolarına otomatik senkronize edilir.
@@ -470,6 +539,7 @@ sudo supervisorctl reread
 sudo supervisorctl update
 sudo supervisorctl restart nozu-import
 sudo supervisorctl restart nozu-scanner
+sudo supervisorctl restart nozu-images
 sudo supervisorctl status
 ```
 
@@ -522,3 +592,10 @@ Test kapsamı şunları içerir:
 - Standard boş tarama `completed` olur ve yeni scanner job oluşturmaz
 - Rate limit sırasında aktif partition `waiting_rate_limit` olur
 - Admin Smart Sync ekranı partition tablosunu OK/DEVAM/Sayfa bilgisiyle render eder
+- Bunny kapalıyken görsel upload isteği yapılmaz
+- Bunny ayarları eksikken upload yapılmaz
+- Bunny Storage HTTP PUT upload, `AccessKey` ve `Content-Type` headerları doğrulanır
+- Bunny path segmentleri encode edilir, slash yapısı korunur
+- Bunny 4xx/5xx veya exception durumunda `null` döner ve API anahtarı loglanmaz
+- Bunny başarısız olduğunda `ExternalMediaService` yerel `media-cache` fallback kullanır
+- Bunny kapalıyken mevcut yerel görsel cache davranışı bozulmaz
