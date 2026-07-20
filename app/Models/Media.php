@@ -98,7 +98,7 @@ class Media extends Model
         $base = Str::slug($title) ?: $type;
         $suffix = $sourceId ? "-{$sourceId}" : '';
 
-        return "{$type}-{$base}{$suffix}";
+        return "{$base}{$suffix}";
     }
 
     public function people(): BelongsToMany

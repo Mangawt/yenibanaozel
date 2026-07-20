@@ -151,14 +151,15 @@
                         @foreach(array_slice($linkedRelations, 0, 12) as $relation)
                             @php($linked = $relation['media'] ?? null)
                             <article class="relation-card {{ $linked ? 'is-linked' : '' }}">
-                                @if(! empty($relation['cover_image']))
-                                    <img src="{{ $relation['cover_image'] }}" alt="">
+                                @php($relationCover = $linked?->cover_image ?? ($relation['cover_image'] ?? null))
+                                @if(! empty($relationCover))
+                                    <img src="{{ $relationCover }}" alt="{{ $linked?->title ?? ($relation['title'] ?? '') }}">
                                 @endif
                                 <div>
                                     <span>{{ $relation['relation_type'] ?? 'İlişkili' }}</span>
                                     <strong>
                                         @if($linked)
-                                            <a href="{{ route('media.show', ['type' => $linked->type, 'media' => $linked]) }}">{{ $relation['title'] }}</a>
+                                            <a href="{{ route('media.show', ['type' => $linked->type, 'media' => $linked]) }}">{{ $linked->title }}</a>
                                         @else
                                             {{ $relation['title'] }}
                                         @endif

@@ -639,29 +639,18 @@ class ExternalMediaService
             }
 
             $urlPath = parse_url($url, PHP_URL_PATH) ?: '';
-            $extension = strtolower(
+            $originalExtension = strtolower(
                 pathinfo($urlPath, PATHINFO_EXTENSION) ?: 'jpg'
             );
 
             if (! in_array(
-                $extension,
+                $originalExtension,
                 ['jpg', 'jpeg', 'png', 'webp', 'gif'],
                 true
             )) {
-                $extension = 'jpg';
+                $originalExtension = 'jpg';
             }
 
-            /*
-             * Dosya anahtarı üç ayrı bileşenden oluşur:
-             *
-             * 1. Kategori
-             * 2. AniList varlık kimliği
-             * 3. Kaynak görsel URL'si
-             *
-             * Aynı varlık ve aynı URL tekrar gelirse mevcut dosya kullanılır.
-             * Farklı kategori veya farklı varlık kimliği kesinlikle ayrı
-             * dosya yolu oluşturur.
-             */
             $identityHash = hash(
                 'sha256',
                 $safeCategory.'|'.$identity
@@ -669,29 +658,29 @@ class ExternalMediaService
 
             $urlHash = hash('sha256', $url);
 
-            $storagePath = 'media-cache/'
+            $storageBase = 'media-cache/'
                 .$safeCategory
                 .'/'
                 .substr($identityHash, 0, 2)
                 .'/'
                 .$identityHash
                 .'-'
-                .$urlHash
-                .'.'
-                .$extension;
+                .$urlHash;
 
             $disk = Storage::disk('public');
-            $existingLocalCache = $disk->exists($storagePath)
-                && $disk->size($storagePath) >= 512;
+
+            $existingLocalPath = $this->firstExistingImagePath(
+                $disk,
+                $storageBase,
+                $originalExtension
+            );
+
+            $existingLocalCache = $existingLocalPath !== null;
 
             if ($existingLocalCache && ! $this->bunny->enabled()) {
                 $this->imageMetrics['cache_hits']++;
 
-                return Storage::url($storagePath);
-            }
-
-            if ($disk->exists($storagePath) && ! $existingLocalCache) {
-                $disk->delete($storagePath);
+                return Storage::url($existingLocalPath);
             }
 
             $downloadStartedAt = microtime(true);
@@ -707,6 +696,7 @@ class ExternalMediaService
 
             if (! $response->ok()) {
                 $this->imageMetrics['failures']++;
+
                 Log::channel('import')->warning(
                     'Görsel indirilemedi.',
                     [
@@ -717,14 +707,15 @@ class ExternalMediaService
                 );
 
                 if ($existingLocalCache) {
-                    return Storage::url($storagePath);
+                    return Storage::url($existingLocalPath);
                 }
 
                 return null;
             }
 
             $body = $response->body();
-            $contentType = strtolower(
+
+            $contentType = $this->normalizeImageContentType(
                 (string) $response->header('Content-Type')
             );
 
@@ -733,6 +724,7 @@ class ExternalMediaService
                 || strlen($body) < 512
             ) {
                 $this->imageMetrics['failures']++;
+
                 Log::channel('import')->warning(
                     'Geçersiz görsel yanıtı alındı.',
                     [
@@ -744,28 +736,47 @@ class ExternalMediaService
                 );
 
                 if ($existingLocalCache) {
-                    return Storage::url($storagePath);
+                    return Storage::url($existingLocalPath);
                 }
 
                 return null;
             }
 
+            [$finalBody, $finalContentType, $finalExtension] =
+                $this->prepareImageForStorage(
+                    $body,
+                    $contentType,
+                    $originalExtension
+                );
+
+            $storagePath = $storageBase.'.'.$finalExtension;
+
             if ($this->bunny->enabled()) {
                 $cdnUrl = $this->bunny->upload(
                     $storagePath,
-                    $body,
-                    $contentType
+                    $finalBody,
+                    $finalContentType
                 );
 
                 if ($cdnUrl) {
                     $this->imageMetrics['downloads']++;
-                    $this->imageMetrics['download_bytes'] += strlen($body);
+                    $this->imageMetrics['download_bytes'] +=
+                        strlen($finalBody);
 
                     return $cdnUrl;
                 }
 
+                Log::channel('import')->warning(
+                    'Bunny başarısız oldu, local fallback kullanılacak.',
+                    [
+                        'storage_path' => $storagePath,
+                        'category' => $safeCategory,
+                        'identity' => $identity,
+                    ]
+                );
+
                 if ($existingLocalCache) {
-                    return Storage::url($storagePath);
+                    return Storage::url($existingLocalPath);
                 }
             }
 
@@ -773,7 +784,7 @@ class ExternalMediaService
                 .'.tmp-'
                 .bin2hex(random_bytes(6));
 
-            $disk->put($temporaryPath, $body);
+            $disk->put($temporaryPath, $finalBody);
 
             if (
                 ! $disk->exists($temporaryPath)
@@ -781,6 +792,10 @@ class ExternalMediaService
             ) {
                 $this->imageMetrics['failures']++;
                 $disk->delete($temporaryPath);
+
+                if ($existingLocalCache) {
+                    return Storage::url($existingLocalPath);
+                }
 
                 return null;
             }
@@ -792,7 +807,7 @@ class ExternalMediaService
             $disk->move($temporaryPath, $storagePath);
 
             $this->imageMetrics['downloads']++;
-            $this->imageMetrics['download_bytes'] += strlen($body);
+            $this->imageMetrics['download_bytes'] += strlen($finalBody);
 
             return Storage::url($storagePath);
         } catch (\Throwable $exception) {
@@ -808,6 +823,169 @@ class ExternalMediaService
             );
 
             return null;
+        }
+    }
+
+    private function firstExistingImagePath(
+        $disk,
+        string $storageBase,
+        string $preferredExtension
+    ): ?string {
+        $extensions = array_values(array_unique([
+            'webp',
+            $preferredExtension,
+            'jpg',
+            'jpeg',
+            'png',
+            'gif',
+        ]));
+
+        foreach ($extensions as $extension) {
+            $candidate = $storageBase.'.'.$extension;
+
+            if (! $disk->exists($candidate)) {
+                continue;
+            }
+
+            if ($disk->size($candidate) >= 512) {
+                return $candidate;
+            }
+
+            $disk->delete($candidate);
+        }
+
+        return null;
+    }
+
+    private function prepareImageForStorage(
+        string $body,
+        string $contentType,
+        string $fallbackExtension
+    ): array {
+        if (! $this->shouldConvertToWebp($contentType)) {
+            return [
+                $body,
+                $contentType,
+                $this->extensionFromContentType(
+                    $contentType,
+                    $fallbackExtension
+                ),
+            ];
+        }
+
+        $webp = $this->convertImageBinaryToWebp($body);
+
+        if (! is_string($webp) || strlen($webp) < 512) {
+            Log::channel('import')->warning(
+                'WebP dönüşümü başarısız, orijinal format kullanılacak.',
+                [
+                    'content_type' => $contentType,
+                    'original_size' => strlen($body),
+                ]
+            );
+
+            return [
+                $body,
+                $contentType,
+                $this->extensionFromContentType(
+                    $contentType,
+                    $fallbackExtension
+                ),
+            ];
+        }
+
+        return [
+            $webp,
+            'image/webp',
+            'webp',
+        ];
+    }
+
+    private function normalizeImageContentType(
+        ?string $contentType
+    ): string {
+        $contentType = strtolower(trim((string) $contentType));
+
+        if (str_contains($contentType, ';')) {
+            $contentType = trim(
+                strstr($contentType, ';', true) ?: $contentType
+            );
+        }
+
+        return $contentType !== ''
+            ? $contentType
+            : 'application/octet-stream';
+    }
+
+    private function shouldConvertToWebp(string $contentType): bool
+    {
+        return in_array(
+            $contentType,
+            ['image/jpeg', 'image/png'],
+            true
+        )
+            && extension_loaded('gd')
+            && function_exists('imagecreatefromstring')
+            && function_exists('imagewebp');
+    }
+
+    private function extensionFromContentType(
+        string $contentType,
+        string $fallbackExtension
+    ): string {
+        return match ($contentType) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/gif' => 'gif',
+            default => $fallbackExtension,
+        };
+    }
+
+    private function convertImageBinaryToWebp(
+        string $body
+    ): ?string {
+        $image = @imagecreatefromstring($body);
+
+        if ($image === false) {
+            return null;
+        }
+
+        try {
+            if (function_exists('imagepalettetotruecolor')) {
+                @imagepalettetotruecolor($image);
+            }
+
+            imagealphablending($image, true);
+            imagesavealpha($image, true);
+
+            ob_start();
+
+            $success = @imagewebp(
+                $image,
+                null,
+                82
+            );
+
+            $webp = ob_get_clean();
+
+            if (
+                ! $success
+                || ! is_string($webp)
+                || strlen($webp) < 512
+            ) {
+                return null;
+            }
+
+            return $webp;
+        } catch (\Throwable) {
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            return null;
+        } finally {
+            imagedestroy($image);
         }
     }
 

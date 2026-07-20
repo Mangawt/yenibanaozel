@@ -22,54 +22,72 @@ class SeoController extends Controller
         return response($body, 200)->header('Content-Type', 'text/plain');
     }
 
-    public function sitemap(): Response
+    public function sitemap()
     {
-        $urls = [
-            ['loc' => route('home'), 'priority' => '1.0', 'changefreq' => 'daily'],
-            ['loc' => route('search', ['type' => 'anime']), 'priority' => '0.8', 'changefreq' => 'daily'],
-            ['loc' => route('search', ['type' => 'manga']), 'priority' => '0.8', 'changefreq' => 'daily'],
-            ['loc' => route('api.docs'), 'priority' => '0.5', 'changefreq' => 'monthly'],
-            ['loc' => route('about'), 'priority' => '0.4', 'changefreq' => 'monthly'],
-            ['loc' => route('privacy'), 'priority' => '0.3', 'changefreq' => 'yearly'],
-            ['loc' => route('terms'), 'priority' => '0.3', 'changefreq' => 'yearly'],
-            ['loc' => route('cookies'), 'priority' => '0.3', 'changefreq' => 'yearly'],
-            ['loc' => route('copyright'), 'priority' => '0.3', 'changefreq' => 'yearly'],
-            ['loc' => route('disclaimer'), 'priority' => '0.3', 'changefreq' => 'yearly'],
-            ['loc' => route('contact'), 'priority' => '0.3', 'changefreq' => 'monthly'],
-        ];
+        return response()->stream(function (): void {
+            echo '<?xml version="1.0" encoding="UTF-8"?>'."
+";
+            echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'."
+";
 
-        $people = [];
-        foreach (Media::query()->latest('updated_at')->get() as $media) {
-            $urls[] = [
-                'loc' => route('media.show', ['type' => $media->type, 'media' => $media]),
-                'lastmod' => $media->updated_at?->toAtomString(),
-                'priority' => '0.7',
-                'changefreq' => 'weekly',
+            $staticUrls = [
+                [route('home'), 'daily', '1.0'],
+                [route('search', ['type' => 'anime']), 'daily', '0.8'],
+                [route('search', ['type' => 'manga']), 'daily', '0.8'],
+                [route('api.docs'), 'monthly', '0.5'],
+                [route('about'), 'monthly', '0.4'],
+                [route('privacy'), 'yearly', '0.3'],
+                [route('terms'), 'yearly', '0.3'],
+                [route('cookies'), 'yearly', '0.3'],
+                [route('copyright'), 'yearly', '0.3'],
+                [route('disclaimer'), 'yearly', '0.3'],
+                [route('contact'), 'monthly', '0.3'],
             ];
 
-            foreach (($media->characters ?? []) as $character) {
-                if (filled($character['voice_actor'] ?? null)) {
-                    $people[Str::slug($character['voice_actor'])] = true;
-                }
+            foreach ($staticUrls as [$loc, $changefreq, $priority]) {
+                echo '<url>';
+                echo '<loc>'.htmlspecialchars($loc, ENT_XML1).'</loc>';
+                echo '<changefreq>'.$changefreq.'</changefreq>';
+                echo '<priority>'.$priority.'</priority>';
+                echo '</url>'."
+";
             }
 
-            foreach (($media->staff ?? []) as $staff) {
-                if (filled($staff['name'] ?? null)) {
-                    $people[Str::slug($staff['name'])] = true;
-                }
-            }
-        }
+            Media::query()
+                ->select(['id', 'slug', 'type', 'updated_at'])
+                ->orderBy('id')
+                ->lazyById(500)
+                ->each(function (Media $media): void {
+                    $loc = route('media.show', [
+                        'type' => $media->type,
+                        'media' => $media,
+                    ]);
 
-        foreach (array_keys($people) as $slug) {
-            $urls[] = [
-                'loc' => route('people.show', ['slug' => $slug]),
-                'priority' => '0.5',
-                'changefreq' => 'weekly',
-            ];
-        }
+                    echo '<url>';
+                    echo '<loc>'.htmlspecialchars($loc, ENT_XML1).'</loc>';
 
-        return response()
-            ->view('seo.sitemap', ['urls' => $urls])
-            ->header('Content-Type', 'application/xml');
+                    if ($media->updated_at) {
+                        echo '<lastmod>'.$media->updated_at->toAtomString().'</lastmod>';
+                    }
+
+                    echo '<changefreq>weekly</changefreq>';
+                    echo '<priority>0.7</priority>';
+                    echo '</url>'."
+";
+
+                    if (ob_get_level() > 0) {
+                        ob_flush();
+                    }
+
+                    flush();
+                });
+
+            echo '</urlset>';
+        }, 200, [
+            'Content-Type' => 'application/xml; charset=UTF-8',
+            'Cache-Control' => 'public, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
+
 }

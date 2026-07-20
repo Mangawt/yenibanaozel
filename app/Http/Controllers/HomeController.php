@@ -106,10 +106,17 @@ class HomeController extends Controller
         abort_unless($media->type === $type, 404);
 
         $linkedRelations = collect($media->relations ?? [])->map(function (array $relation): array {
-            $relation['media'] = Media::query()
-                ->where('type', $relation['type'] ?? null)
-                ->where('source_ids', 'like', '%"anilist":'.($relation['id'] ?? 0).'%')
-                ->first();
+            $anilistId = (int) ($relation['id'] ?? 0);
+
+            $relation['media'] = $anilistId > 0
+                ? Media::query()
+                    ->where('type', $relation['type'] ?? null)
+                    ->whereRaw(
+                        "CAST(JSON_UNQUOTE(JSON_EXTRACT(source_ids, '$.anilist')) AS UNSIGNED) = ?",
+                        [$anilistId]
+                    )
+                    ->first()
+                : null;
 
             return $relation;
         })->all();
@@ -137,7 +144,10 @@ class HomeController extends Controller
                 ->whereKeyNot($media->id)
                 ->when($recommendedIds->isNotEmpty(), fn ($query) => $query->where(function ($inner) use ($recommendedIds): void {
                     foreach ($recommendedIds as $id) {
-                        $inner->orWhere('source_ids', 'like', '%"anilist":'.$id.'%');
+                        $inner->orWhereRaw(
+                            "CAST(JSON_UNQUOTE(JSON_EXTRACT(source_ids, '$.anilist')) AS UNSIGNED) = ?",
+                            [(int) $id]
+                        );
                     }
                 }))
                 ->latest('average_score')
