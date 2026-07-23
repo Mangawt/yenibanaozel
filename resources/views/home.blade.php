@@ -1,101 +1,128 @@
 @extends('layouts.app')
 
 @section('content')
-    @if($heroItems->isNotEmpty())
-        <section class="home-slider">
-            @foreach($heroItems as $index => $item)
-                <article class="slide @if($index === 0) active @endif" style="--hero:url('{{ $item->banner_image ?: $item->cover_image }}')">
-                    <div class="slide-copy">
-                        <span>{{ $item->type === 'anime' ? 'Anime' : 'Manga' }} · {{ $item->format }}</span>
-                        <h1>{{ $item->title }}</h1>
-                        <p>{{ \Illuminate\Support\Str::limit(strip_tags($item->description), 180) }}</p>
-                        <a class="button primary" href="{{ route('media.show', ['type' => $item->type, 'media' => $item]) }}">Detaya git</a>
+    <div class="nozu-discover nozu-discover-single">
+        <div class="nozu-discover-main">
+            <section class="nozu-search-head">
+                <span class="nozu-discover-eyebrow">nozu.me keşif</span>
+                <h1>Anime ve Manga Keşfet</h1>
+                <form class="nozu-large-search autocomplete-wrap" action="{{ route('search') }}" method="get">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input class="js-autocomplete" type="search" name="q" placeholder="Anime, manga veya karakter ara" autocomplete="off">
+                </form>
+                <div class="nozu-discover-actions">
+                    <a href="{{ route('search', ['type' => 'anime']) }}"><i class="fa-solid fa-tv"></i><span>Anime</span></a>
+                    <a href="{{ route('search', ['type' => 'manga']) }}"><i class="fa-solid fa-book-open"></i><span>Manga</span></a>
+                    <a href="{{ route('search', ['sort' => 'score']) }}"><i class="fa-solid fa-star"></i><span>Yüksek puan</span></a>
+                    <a href="{{ route('search', ['status' => 'NOT_YET_RELEASED']) }}"><i class="fa-solid fa-calendar-days"></i><span>Yakında</span></a>
+                </div>
+                <p>Ya da <a href="{{ route('search') }}">gelişmiş arama</a> ile tür, yıl ve sezon filtrelerini kullan.</p>
+            </section>
+
+            <section class="nozu-row-section">
+                <x-section-title title="Şu An Trend" :href="route('search')" />
+                <div class="poster-grid nozu-poster-strip">
+                    @forelse($trending->take(6) as $item)
+                        @include('components.media-card', ['item' => $item])
+                    @empty
+                        <p class="empty">Henüz içerik yok. Admin panelinden kuyrukla içerik çekebilirsin.</p>
+                    @endforelse
+                </div>
+            </section>
+
+            @if($seasonPopular->isNotEmpty())
+                <section class="nozu-row-section">
+                    <x-section-title title="Bu Sezon Popüler" :href="route('search', ['type' => 'anime'])" />
+                    <div class="poster-grid nozu-poster-strip">
+                        @foreach($seasonPopular->take(6) as $item)
+                            @include('components.media-card', ['item' => $item])
+                        @endforeach
                     </div>
-                </article>
-            @endforeach
-        </section>
-    @endif
+                </section>
+            @endif
 
-    <section class="filter-hero">
-        <form class="ani-filter" action="{{ route('search') }}" method="get">
-            <label>
-                <span>Arama</span>
-                <input class="js-autocomplete" type="search" name="q" placeholder="Anime veya manga ara" autocomplete="off">
-            </label>
-            <label>
-                <span>Türler</span>
-                <select name="genre">
-                    <option value="">Tümü</option>
-                    @foreach($genres as $label)
-                        <option value="{{ $label }}">{{ $label }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <label>
-                <span>Yıl</span>
-                <select name="year">
-                    <option value="">Tümü</option>
-                    @for($year = now()->year + 1; $year >= 1980; $year--)
-                        <option value="{{ $year }}">{{ $year }}</option>
-                    @endfor
-                </select>
-            </label>
-            <label>
-                <span>Sezon</span>
-                <select name="season">
-                    <option value="">Tümü</option>
-                    @foreach($seasons as $label)
-                        <option value="{{ $label }}">{{ $label }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <label>
-                <span>Biçim</span>
-                <select name="format">
-                    <option value="">Tümü</option>
-                    @foreach($formats as $label)
-                        <option value="{{ $label }}">{{ $label }}</option>
-                    @endforeach
-                </select>
-            </label>
-            <button class="filter-button" aria-label="Filtrele">☰</button>
-        </form>
-    </section>
+            @if($upcoming->isNotEmpty())
+                <section class="nozu-row-section">
+                    <x-section-title title="Yakında Gelecekler" :href="route('search')" />
+                    <div class="poster-grid nozu-poster-strip">
+                        @foreach($upcoming->take(6) as $item)
+                            @include('components.media-card', ['item' => $item])
+                        @endforeach
+                    </div>
+                </section>
+            @endif
 
-    <x-section-title title="Şu An Trend" :href="route('search')" />
-    <div class="poster-grid home-five">
-        @forelse($trending as $item)
-            @include('components.media-card', ['item' => $item])
-        @empty
-            <p class="empty">Henüz içerik yok. Admin panelinden kuyrukla içerik çekebilirsin.</p>
-        @endforelse
-    </div>
+            @if($topAnime->isNotEmpty())
+                <section class="nozu-row-section">
+                    <x-section-title title="En Yüksek Puanlı Anime" :href="route('search', ['type' => 'anime', 'sort' => 'score'])" />
+                    <div class="poster-grid nozu-poster-strip">
+                        @foreach($topAnime->take(6) as $item)
+                            @include('components.media-card', ['item' => $item])
+                        @endforeach
+                    </div>
+                </section>
+            @endif
 
-    <x-section-title title="Bu Sezon Popüler" :href="route('search', ['season' => request('season')])" />
-    <div class="poster-grid home-five">
-        @foreach($seasonPopular as $item)
-            @include('components.media-card', ['item' => $item])
-        @endforeach
-    </div>
+            @if($topManga->isNotEmpty())
+                <section class="nozu-row-section">
+                    <x-section-title title="En Popüler Manga" :href="route('search', ['type' => 'manga'])" />
+                    <div class="poster-grid nozu-poster-strip">
+                        @foreach($topManga->take(6) as $item)
+                            @include('components.media-card', ['item' => $item])
+                        @endforeach
+                    </div>
+                </section>
+            @endif
 
-    <x-section-title title="Yakında Gelecekler" :href="route('search')" />
-    <div class="poster-grid home-five">
-        @foreach($upcoming as $item)
-            @include('components.media-card', ['item' => $item])
-        @endforeach
-    </div>
-
-    <x-section-title title="En Yüksek Puanlı Animeler" :href="route('search', ['type' => 'anime'])" />
-    <div class="poster-grid home-five">
-        @foreach($topAnime as $item)
-            @include('components.media-card', ['item' => $item])
-        @endforeach
-    </div>
-
-    <x-section-title title="En Yüksek Puanlı Mangalar" :href="route('search', ['type' => 'manga'])" />
-    <div class="poster-grid home-five">
-        @foreach($topManga as $item)
-            @include('components.media-card', ['item' => $item])
-        @endforeach
+            @if($top100Anime->isNotEmpty())
+                <section class="nozu-top100-section">
+                    <div class="section-title nozu-top100-title">
+                        <h2>Top 100 Anime</h2>
+                        <a href="{{ route('search', ['type' => 'anime', 'sort' => 'score']) }}">Devamını gör</a>
+                    </div>
+                    <div class="nozu-top100-list">
+                        @foreach($top100Anime as $item)
+                            <a class="nozu-top100-item" href="{{ route('media.show', ['type' => $item->type, 'media' => $item]) }}">
+                                <span class="nozu-top100-rank">#{{ $loop->iteration }}</span>
+                                @if($item->cover_image)
+                                    <x-responsive-image
+                                        :src="$item->cover_image"
+                                        :alt="$item->title"
+                                        sizes="(max-width: 760px) 74px, 64px"
+                                        :widths="[96, 160]"
+                                    />
+                                @endif
+                                <span class="nozu-top100-main">
+                                    <strong>{{ $item->title }}</strong>
+                                    <small>
+                                        @forelse(array_slice($item->genres ?? [], 0, 3) as $genre)
+                                            <em>{{ $genre }}</em>
+                                        @empty
+                                            <em>Anime</em>
+                                        @endforelse
+                                    </small>
+                                </span>
+                                <span class="nozu-top100-meta">
+                                    <strong>{{ $item->format ?: 'Anime' }}</strong>
+                                    <small>
+                                        @if($item->episodes)
+                                            {{ $item->episodes }} bölüm
+                                        @elseif($item->duration)
+                                            {{ $item->duration }} dk
+                                        @else
+                                            {{ ucfirst($item->type) }}
+                                        @endif
+                                    </small>
+                                </span>
+                                <span class="nozu-top100-meta">
+                                    <strong>{{ trim(($item->season ?? '').' '.($item->season_year ?? '')) ?: ($item->start_year ?: '-') }}</strong>
+                                    <small>{{ $item->status ?: 'Kayıtlı' }}</small>
+                                </span>
+                            </a>
+                        @endforeach
+                    </div>
+                </section>
+            @endif
+        </div>
     </div>
 @endsection

@@ -5,6 +5,7 @@ use App\Http\Controllers\AdminContentController;
 use App\Http\Controllers\AdminSyncController;
 use App\Http\Controllers\ApiController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CharacterController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PersonController;
 use App\Http\Controllers\PageController;
@@ -40,6 +41,8 @@ Route::get('/cerez-tercihleri', [PageController::class, 'cookiePreferences'])->n
 Route::get('/robots.txt', [SeoController::class, 'robots'])->name('seo.robots');
 Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('seo.sitemap');
 Route::get('/autocomplete', [HomeController::class, 'autocomplete'])->name('autocomplete');
+Route::get('/karakterler', [CharacterController::class, 'index'])->name('characters.index');
+Route::get('/karakter/{slug}', [CharacterController::class, 'show'])->name('characters.show');
 Route::get('/sanatcilar', [PersonController::class, 'index'])->name('people.index');
 Route::get('/sanatci/{slug}', [PersonController::class, 'show'])->name('people.show');
 Route::get('/studyolar', [StudioController::class, 'index'])->name('studios.index');
@@ -50,6 +53,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/media/{media}/liste', [SocialController::class, 'updateMediaList'])->name('media.list');
     Route::delete('/media/{media}/liste', [SocialController::class, 'removeMediaList'])->name('media.list.remove');
     Route::post('/media/{media}/favori', [SocialController::class, 'toggleFavorite'])->name('media.favorite');
+    Route::post('/media/{media}/sikayet', [SocialController::class, 'reportMedia'])->name('media.report');
     Route::post('/media/{media}/yorum', [SocialController::class, 'comment'])->name('media.comment');
     Route::post('/yorum/{comment}/oy', [SocialController::class, 'voteComment'])->name('comments.vote');
     Route::post('/yorum/{comment}/sikayet', [SocialController::class, 'reportComment'])->name('comments.report');

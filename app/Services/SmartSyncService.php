@@ -20,6 +20,7 @@ class SmartSyncService
     public function start(array $options): SyncState
     {
         $options = $this->normalizeOptions($options);
+        $this->cleanupCompleted();
 
         if (SyncState::query()
             ->where('type', $options['type'])
@@ -100,6 +101,7 @@ class SmartSyncService
 
     public function resume(SyncState $state): void
     {
+        $this->cleanupCompleted();
         $this->ensureFullCatalogPartitions($state);
 
         $state->update([
@@ -114,6 +116,27 @@ class SmartSyncService
         ]);
 
         AniListScannerJob::dispatch($state->id)->onConnection('database')->onQueue('scanner');
+    }
+
+    public function cleanupCompleted(int $olderThanMinutes = 5): int
+    {
+        $ids = SyncState::query()
+            ->where('status', SyncState::STATUS_COMPLETED)
+            ->where('updated_at', '<=', now()->subMinutes(max(0, $olderThanMinutes)))
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        SyncPartitionState::query()->whereIn('sync_state_id', $ids)->delete();
+        $deleted = SyncState::query()->whereIn('id', $ids)->delete();
+
+        Log::channel('scanner')->info('Tamamlanan Smart Sync kayitlari temizlendi.', [
+            'deleted' => $deleted,
+        ]);
+
+        return $deleted;
     }
 
     public function stop(SyncState $state): void

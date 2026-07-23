@@ -29,6 +29,13 @@
                     @csrf
                     <button class="comment-tool" title="Şikayet et"><i class="fa-regular fa-flag"></i></button>
                 </form>
+                @if(in_array(auth()->user()?->role, ['admin', 'super_admin'], true))
+                    <form method="post" action="{{ route('admin.comments.destroy', $comment) }}" onsubmit="return confirm('Bu yorum silinsin mi?')">
+                        @csrf
+                        @method('DELETE')
+                        <button class="comment-tool danger" title="Yorumu sil"><i class="fa-regular fa-trash-can"></i></button>
+                    </form>
+                @endif
             @else
                 <strong class="comment-score {{ $comment->score > 0 ? 'positive' : ($comment->score < 0 ? 'negative' : '') }}">{{ $comment->score }}</strong>
             @endauth

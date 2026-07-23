@@ -28,7 +28,7 @@ class ApiController extends Controller
                 'title' => 'Nozu API v1 - Ücretsiz Anime ve Manga REST API',
                 'description' => 'Nozu API v1; anime ve manga verilerini ücretsiz, anahtarsız ve standart JSON response ile sunar.',
                 'canonical' => $publicUrl.'/api',
-                'image' => $publicUrl.'/icon.svg',
+                'image' => $publicUrl.'/nozu-logo.svg',
                 'schema' => [
                     '@context' => 'https://schema.org',
                     '@type' => 'WebAPI',

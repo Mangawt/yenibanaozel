@@ -1,49 +1,38 @@
 @extends('layouts.app')
 
-@php
-    $voiceCount = $credits->where('kind', 'Seslendirme')->count();
-    $staffCount = $credits->where('kind', '!=', 'Seslendirme')->count();
-@endphp
-
 @section('content')
     <section class="person-hero person-detail-hero">
         <div class="person-avatar hero-avatar">
-            @if($person['image'])
+            @if($character['image'])
                 <x-responsive-image
-                    :src="$person['image']"
-                    :alt="$person['name']"
+                    :src="$character['image']"
+                    :alt="$character['name']"
                     sizes="120px"
                     :widths="[160, 240]"
                     loading="eager"
                 />
             @else
-                <span>{{ mb_substr($person['name'], 0, 1) }}</span>
+                <span>{{ mb_substr($character['name'], 0, 1) }}</span>
             @endif
         </div>
         <div>
-            <p class="eyebrow">Sanatçı profili</p>
-            <h1>{{ $person['name'] }}</h1>
-            <p>{{ $credits->count() }} kayıtlı çalışma nozu.me arşivinde görünüyor.</p>
-            <div class="person-stat-row">
-                <span>{{ $voiceCount }} seslendirme</span>
-                <span>{{ $staffCount }} ekip katkısı</span>
-            </div>
+            <p class="eyebrow">Karakter profili</p>
+            <h1>{{ $character['name'] }}</h1>
+            <p>{{ $credits->count() }} kayıtlı seri nozu.me arşivinde görünüyor.</p>
         </div>
     </section>
 
     <section class="person-credit-layout">
         <aside class="person-mini-panel">
             <h2>Kısa Bilgi</h2>
-            <p>Bu sayfa, kayıtlı anime ve manga içeriklerindeki karakter seslendirmeleri ve ekip katkılarından otomatik oluşturulur.</p>
+            <p>Bu sayfa, anime ve manga kayıtlarındaki karakter verilerinden otomatik oluşturulur.</p>
             <div class="person-pill-grid">
-                <span>Seslendirme {{ $voiceCount }}</span>
-                <span>Ekip {{ $staffCount }}</span>
-                <span>Toplam {{ $credits->count() }}</span>
+                <span>Seri {{ $credits->count() }}</span>
             </div>
         </aside>
 
         <div>
-            <x-section-title title="Çalışmaları" />
+            <x-section-title title="Yer Aldığı Seriler" />
             <div class="credit-list enhanced">
                 @foreach($credits as $credit)
                     <article class="credit-card enhanced">
@@ -58,20 +47,13 @@
                             @endif
                         </a>
                         <div>
-                            <span>{{ $credit['kind'] }}</span>
+                            <span>{{ $credit['role'] ?: 'Karakter' }}</span>
                             <h2><a href="{{ route('media.show', ['type' => $credit['media']->type, 'media' => $credit['media']]) }}">{{ $credit['media']->title }}</a></h2>
-                            <p>{{ $credit['role'] ?: 'Katkı' }}</p>
+                            @if($credit['voice_actor'])
+                                <p>Seslendiren: {{ $credit['voice_actor'] }}</p>
+                            @endif
                             <small>{{ strtoupper($credit['media']->type) }} / {{ $credit['media']->format }} @if($credit['media']->average_score) / {{ $credit['media']->average_score }}% @endif</small>
                         </div>
-                        @if($credit['image'])
-                            <x-responsive-image
-                                :src="$credit['image']"
-                                alt=""
-                                class="credit-role-image"
-                                sizes="64px"
-                                :widths="[96, 160]"
-                            />
-                        @endif
                     </article>
                 @endforeach
             </div>

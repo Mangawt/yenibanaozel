@@ -17,12 +17,29 @@
             <section class="panel">
                 <div class="admin-table">
                     @forelse($reports as $report)
+                        @php
+                            $reasonLabels = [
+                                'wrong_info' => 'Yanlış anime bilgileri',
+                                'wrong_images' => 'Yanlış Anime görselleri',
+                                'wrong_summary' => 'Yanlış Anime özeti',
+                                'translation_error' => 'Çeviri Hatası',
+                                'translation_help' => 'Çeviri konusunda yardımcı olmak istiyor',
+                                'comment' => 'Yorum şikayeti',
+                                'profile' => 'Profil şikayeti',
+                                'other' => 'Diğer',
+                            ];
+                        @endphp
                         <article class="report-admin-row">
                             <div>
-                                <strong>{{ ucfirst($report->reason) }} · {{ $report->status }}</strong>
+                                <strong>{{ $reasonLabels[$report->reason] ?? ucfirst($report->reason) }} · {{ $report->status }}</strong>
                                 <small>Bildiren: {{ $report->user?->username ? '@'.$report->user->username : 'Misafir' }}</small>
                                 @if($report->details)<p>{{ $report->details }}</p>@endif
-                                <small>{{ class_basename($report->reportable_type) }} #{{ $report->reportable_id }}</small>
+                                <small>
+                                    {{ class_basename($report->reportable_type) }} #{{ $report->reportable_id }}
+                                    @if($report->reportable instanceof \App\Models\Media)
+                                        · <a href="{{ route('media.show', ['type' => $report->reportable->type, 'media' => $report->reportable]) }}" target="_blank" rel="noopener">Seriyi aç</a>
+                                    @endif
+                                </small>
                             </div>
                             <form class="inline-role-form" method="post" action="{{ route('admin.reports.update', $report) }}">
                                 @csrf
@@ -35,7 +52,7 @@
                                 <button class="button primary">Kaydet</button>
                             </form>
                             @if($report->reportable instanceof \App\Models\Comment)
-                                <form method="post" action="{{ route('admin.comments.destroy', $report->reportable) }}">
+                                <form method="post" action="{{ route('admin.comments.destroy', $report->reportable) }}" onsubmit="return confirm('Bu yorum silinsin mi?')">
                                     @csrf
                                     @method('DELETE')
                                     <button>Yorumu sil</button>

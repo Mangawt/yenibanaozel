@@ -57,6 +57,24 @@ class SocialController extends Controller
         return back()->with('status', 'Liste güncellendi.');
     }
 
+    public function reportMedia(Media $media, Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['required', 'in:wrong_info,wrong_images,wrong_summary,translation_error,translation_help,other'],
+            'details' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        Report::query()->create([
+            'user_id' => $request->user()->id,
+            'reportable_type' => Media::class,
+            'reportable_id' => $media->id,
+            'reason' => $validated['reason'],
+            'details' => $validated['details'] ?? null,
+        ]);
+
+        return back()->with('status', 'Raporun alındı. Teşekkür ederiz.');
+    }
+
     public function removeMediaList(Media $media, Request $request): RedirectResponse
     {
         MediaList::query()

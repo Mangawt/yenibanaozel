@@ -292,7 +292,7 @@ class AdminController extends Controller
     public function updateUser(Request $request, User $user): RedirectResponse
     {
         $validated = $request->validate([
-            'role' => ['required', 'in:user,admin,super_admin'],
+            'role' => ['required', 'in:user,super_admin,admin,moderator,editor,translator,viewer'],
         ]);
 
         if ($user->id === $request->user()->id && $validated['role'] === 'user') {

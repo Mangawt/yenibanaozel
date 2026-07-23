@@ -16,6 +16,8 @@ class StartScheduledSmartSync extends Command
 
     public function handle(SmartSyncService $sync): int
     {
+        $sync->cleanupCompleted(0);
+
         $runType = (string) $this->argument('run_type');
         $type = (string) $this->argument('type');
         $year = (int) now()->year;

@@ -12,7 +12,7 @@ class Seo
         return array_merge([
             'title' => 'nozu.me - Türkçe Anime ve Manga Veritabanı',
             'description' => 'nozu.me, Türkçe anime ve manga keşif arşividir. İçerikler tanıtım, keşif ve bilgi amaçlı sunulur.',
-            'image' => asset('icon.svg'),
+            'image' => asset('nozu-logo.svg'),
             'type' => 'website',
             'canonical' => url()->current(),
             'robots' => 'index,follow,max-image-preview:large',
@@ -29,7 +29,7 @@ class Seo
         return self::defaults([
             'title' => "{$media->title} - Detaylar, Karakterler ve Yorumlar | nozu.me",
             'description' => $description ?: "{$media->title} için Türkçe {$kind} bilgileri, karakterler, ilişkili eserler, ekip ve tür detayları.",
-            'image' => $media->cover_image ? url($media->cover_image) : asset('icon.svg'),
+            'image' => $media->cover_image ? url($media->cover_image) : asset('nozu-logo.svg'),
             'type' => 'article',
             'canonical' => route('media.show', ['type' => $media->type, 'media' => $media]),
             'schema' => [
@@ -60,7 +60,7 @@ class Seo
         return self::defaults([
             'title' => "{$person['name']} seslendirdiği karakterler ve çalışmaları - nozu.me",
             'description' => "{$person['name']} için nozu.me arşivindeki seslendirme ve anime/manga ekip çalışmaları.",
-            'image' => $person['image'] ? url($person['image']) : asset('icon.svg'),
+            'image' => $person['image'] ? url($person['image']) : asset('nozu-logo.svg'),
             'type' => 'profile',
             'schema' => [
                 '@context' => 'https://schema.org',
@@ -79,7 +79,7 @@ class Seo
             '@type' => 'Organization',
             'name' => 'nozu.me',
             'url' => config('app.url'),
-            'logo' => asset('icon.svg'),
+            'logo' => asset('nozu-logo.svg'),
             'sameAs' => [],
         ];
     }

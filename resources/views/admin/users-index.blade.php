@@ -33,9 +33,17 @@
                                 @csrf
                                 @method('PUT')
                                 <select name="role">
-                                    <option value="user" @selected($user->role === 'user')>User</option>
-                                    <option value="admin" @selected($user->role === 'admin')>Admin</option>
-                                    <option value="super_admin" @selected($user->role === 'super_admin')>Super Admin</option>
+                                    @foreach([
+                                        'user' => 'User',
+                                        'viewer' => 'Viewer',
+                                        'translator' => 'Translator',
+                                        'editor' => 'Editor',
+                                        'moderator' => 'Moderator',
+                                        'admin' => 'Admin',
+                                        'super_admin' => 'Super Admin',
+                                    ] as $value => $label)
+                                        <option value="{{ $value }}" @selected($user->role === $value)>{{ $label }}</option>
+                                    @endforeach
                                 </select>
                                 <button class="button primary">Kaydet</button>
                             </form>

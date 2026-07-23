@@ -28,6 +28,7 @@ class ExternalMediaService
         private readonly TranslationService $translator,
         private readonly Settings $settings,
         private readonly BunnyStorageService $bunny,
+        private readonly ImageVariantService $imageVariants,
     ) {
     }
 
@@ -416,7 +417,7 @@ class ExternalMediaService
                 'url' => $link['url'] ?? null,
                 'type' => $link['type'] ?? null,
                 'language' => $link['language'] ?? null,
-                'icon' => null,
+                'icon' => $link['icon'] ?? null,
             ])->filter(fn ($link) => filled($link['url']))->values()->all(),
             'streaming_episodes' => collect($item['streamingEpisodes'] ?? [])->map(fn (array $episode): array => [
                 'title' => $episode['title'] ?? null,
@@ -750,8 +751,22 @@ class ExternalMediaService
                 );
 
             $storagePath = $storageBase.'.'.$finalExtension;
+            $variants = $this->imageVariants->createVariants(
+                $disk,
+                $storagePath,
+                $finalBody,
+                $finalContentType
+            );
 
             if ($this->bunny->enabled()) {
+                foreach ($variants as $variant) {
+                    $this->bunny->upload(
+                        $variant['path'],
+                        $variant['contents'],
+                        $variant['content_type']
+                    );
+                }
+
                 $cdnUrl = $this->bunny->upload(
                     $storagePath,
                     $finalBody,

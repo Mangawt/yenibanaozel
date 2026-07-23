@@ -61,7 +61,12 @@
             <article class="library-card">
                 <a href="{{ route('media.show', ['type' => $entry->media->type, 'media' => $entry->media]) }}">
                     @if($entry->media->cover_image)
-                        <img src="{{ $entry->media->cover_image }}" alt="{{ $entry->media->title }}">
+                        <x-responsive-image
+                            :src="$entry->media->cover_image"
+                            :alt="$entry->media->title"
+                            sizes="96px"
+                            :widths="[160, 240]"
+                        />
                     @endif
                     <div>
                         <span>{{ $statusLabels[$entry->status] ?? $entry->status }}</span>

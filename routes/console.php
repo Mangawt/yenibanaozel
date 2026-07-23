@@ -63,6 +63,12 @@ Schedule::command('nozu:smart-sync-schedule active anime')
     ->withoutOverlapping()
     ->onOneServer();
 
+Schedule::call(fn () => app(\App\Services\SmartSyncService::class)->cleanupCompleted(5))
+    ->everyTenMinutes()
+    ->name('smart-sync-cleanup-completed')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 Schedule::command('nozu:smart-sync-schedule active manga')
     ->everySixHours()
     ->withoutOverlapping()

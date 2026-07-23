@@ -7,6 +7,7 @@ use App\Services\Settings;
 use App\Support\AnimeLabels;
 use App\Support\Seo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class HomeController extends Controller
 {
@@ -32,6 +33,13 @@ class HomeController extends Controller
                 ->get(),
             'topAnime' => Media::query()->where('type', 'anime')->latest('average_score')->limit(self::HOME_SECTION_LIMIT)->get(),
             'topManga' => Media::query()->where('type', 'manga')->latest('average_score')->limit(self::HOME_SECTION_LIMIT)->get(),
+            'top100Anime' => Media::query()
+                ->where('type', 'anime')
+                ->whereNotNull('average_score')
+                ->orderByDesc('average_score')
+                ->orderByDesc('popularity')
+                ->limit(10)
+                ->get(),
             'genres' => AnimeLabels::GENRES,
             'formats' => AnimeLabels::FORMATS,
             'seasons' => AnimeLabels::SEASONS,
@@ -47,6 +55,7 @@ class HomeController extends Controller
         $year = $request->string('year')->value();
         $season = $request->string('season')->value();
         $format = $request->string('format')->value();
+        $status = $request->string('status')->value();
 
         $items = $this->searchQuery($request)
             ->latest('popularity')
@@ -62,6 +71,7 @@ class HomeController extends Controller
             'year' => $year,
             'season' => $season,
             'format' => $format,
+            'status' => $status,
             'genres' => AnimeLabels::GENRES,
             'formats' => AnimeLabels::FORMATS,
             'seasons' => AnimeLabels::SEASONS,
@@ -109,13 +119,7 @@ class HomeController extends Controller
             $anilistId = (int) ($relation['id'] ?? 0);
 
             $relation['media'] = $anilistId > 0
-                ? Media::query()
-                    ->where('type', $relation['type'] ?? null)
-                    ->whereRaw(
-                        "CAST(JSON_UNQUOTE(JSON_EXTRACT(source_ids, '$.anilist')) AS UNSIGNED) = ?",
-                        [$anilistId]
-                    )
-                    ->first()
+                ? $this->mediaByAniListId($relation['type'] ?? null, $anilistId)
                 : null;
 
             return $relation;
@@ -144,10 +148,7 @@ class HomeController extends Controller
                 ->whereKeyNot($media->id)
                 ->when($recommendedIds->isNotEmpty(), fn ($query) => $query->where(function ($inner) use ($recommendedIds): void {
                     foreach ($recommendedIds as $id) {
-                        $inner->orWhereRaw(
-                            "CAST(JSON_UNQUOTE(JSON_EXTRACT(source_ids, '$.anilist')) AS UNSIGNED) = ?",
-                            [(int) $id]
-                        );
+                        $this->whereAniListId($inner, (int) $id, 'or');
                     }
                 }))
                 ->latest('average_score')
@@ -164,6 +165,11 @@ class HomeController extends Controller
         $year = $request->string('year')->value();
         $season = $request->string('season')->value();
         $format = $request->string('format')->value();
+        $status = $request->string('status')->value();
+
+        $statusLabel = $status && array_key_exists($status, AnimeLabels::STATUSES)
+            ? AnimeLabels::status($status)
+            : $status;
 
         return Media::query()
             ->when(in_array($type, ['anime', 'manga'], true), fn ($builder) => $builder->where('type', $type))
@@ -171,10 +177,54 @@ class HomeController extends Controller
             ->when($year, fn ($builder) => $builder->where('start_year', (int) $year))
             ->when($season, fn ($builder) => $builder->where('season', $season))
             ->when($format, fn ($builder) => $builder->where('format', $format))
+            ->when($statusLabel, fn ($builder) => $builder->where('status', $statusLabel))
             ->when($query, fn ($builder) => $builder->where(function ($inner) use ($query): void {
                 $inner->where('title', 'like', "%{$query}%")
                     ->orWhere('title_english', 'like', "%{$query}%")
                     ->orWhere('title_native', 'like', "%{$query}%");
             }));
+    }
+
+    private function mediaByAniListId(?string $type, int $anilistId): ?Media
+    {
+        if (! in_array($type, ['anime', 'manga'], true)) {
+            return null;
+        }
+
+        $query = Media::query()->where('type', $type);
+        $this->whereAniListId($query, $anilistId);
+
+        return $query->first();
+    }
+
+    private function whereAniListId($query, int $anilistId, string $boolean = 'and'): void
+    {
+        $driver = DB::connection()->getDriverName();
+
+        if (in_array($driver, ['mysql', 'mariadb'], true)) {
+            $query->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(source_ids, '$.anilist')) AS UNSIGNED) = ?",
+                [$anilistId],
+                $boolean
+            );
+
+            return;
+        }
+
+        if ($driver === 'pgsql') {
+            $query->whereRaw("(source_ids->>'anilist')::int = ?", [$anilistId], $boolean);
+
+            return;
+        }
+
+        $method = $boolean === 'or' ? 'orWhere' : 'where';
+
+        $query->{$method}(function ($inner) use ($anilistId): void {
+            $inner->where('source_ids', 'like', '%"anilist":'.$anilistId.'%')
+                ->orWhere('source_ids', 'like', '%"anilist":"'.$anilistId.'"%')
+                ->orWhere('source_ids', 'like', '%"anilist": '.$anilistId.'%')
+                ->orWhere('source_ids', 'like', '%"anilist": "'.$anilistId.'"%')
+                ->orWhere('slug', 'like', '%-'.$anilistId);
+        });
     }
 }

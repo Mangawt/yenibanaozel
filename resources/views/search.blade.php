@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('content')
     <section class="filter-hero compact">
@@ -51,11 +51,18 @@
                     @endforeach
                 </select>
             </label>
-            <button class="filter-button" aria-label="Filtrele">☰</button>
+            <button class="filter-button" aria-label="Filtrele"><i class="fa-solid fa-sliders"></i></button>
         </form>
     </section>
 
+    @php
+        $total = method_exists($items, 'total') ? $items->total() : $items->count();
+        $typeLabel = $type === 'anime' ? 'anime' : ($type === 'manga' ? 'manga' : 'sonuç');
+    @endphp
+
     <x-section-title title="Sonuçlar" />
+    <p class="result-count">{{ number_format($total, 0, ',', '.') }} {{ $typeLabel }}</p>
+
     <div class="poster-grid">
         @forelse($items as $item)
             @include('components.media-card', ['item' => $item])
