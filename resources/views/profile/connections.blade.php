@@ -11,7 +11,7 @@
             <a class="directory-card" href="{{ route('profile.show', $person->username) }}">
                 <div class="directory-avatar">
                     @if($person->avatar_path)
-                        <img src="{{ asset('storage/'.$person->avatar_path) }}" alt="{{ $person->username }}">
+                        <img src="{{ app(\App\Services\UserMediaStorage::class)->url($person->avatar_path) }}" alt="{{ $person->username }}">
                     @else
                         <span>{{ mb_substr($person->username ?: 'N', 0, 1) }}</span>
                     @endif

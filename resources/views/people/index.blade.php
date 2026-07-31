@@ -1,40 +1,84 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
-    @php($total = method_exists($people, 'total') ? $people->total() : $people->count())
+    @php
+        $total = method_exists($people, 'total')
+            ? $people->total()
+            : $people->count();
+    @endphp
 
     <section class="directory-hero nozu-directory-hero">
         <p class="eyebrow">Kişiler</p>
-        <h1>Sanatçılar</h1>
-        <p>Seslendirme sanatçıları ve ekip üyelerini tek yerde keşfet.</p>
-        <strong class="directory-count">{{ number_format($total, 0, ',', '.') }} sanatçı</strong>
+        <h1>Sanatçılar ve Sektör Çalışanları</h1>
+        <p>Yazarları, çizerleri, yönetmenleri, seslendirme sanatçılarını ve diğer sektör çalışanların keşfet.</p>
+
+        <strong class="directory-count">
+            {{ number_format($total, 0, ',', '.') }} kişi
+        </strong>
     </section>
 
     <section class="directory-grid nozu-directory-grid">
-        @foreach($people as $person)
+        @foreach ($people as $person)
             @php
-                $name = is_array($person) ? $person['name'] : $person->name;
-                $slug = is_array($person) ? $person['slug'] : $person->slug;
-                $image = is_array($person) ? ($person['image'] ?? null) : $person->image;
-                $count = is_array($person) ? $person['count'] : $person->credits_count;
+                $name = is_array($person)
+                    ? ($person['name'] ?? 'İsimsiz Kişi')
+                    : ($person->name ?? 'İsimsiz Kişi');
+
+                $slug = is_array($person)
+                    ? ($person['slug'] ?? null)
+                    : ($person->slug ?? null);
+
+                $image = is_array($person)
+                    ? ($person['image'] ?? null)
+                    : ($person->image ?? null);
+
+                $count = is_array($person)
+                    ? ($person['count'] ?? $person['media_count'] ?? 0)
+                    : ($person->media_count ?? $person->count ?? 0);
+
+                $role = is_array($person)
+                    ? ($person['role'] ?? $person['primary_role'] ?? null)
+                    : ($person->role ?? $person->primary_role ?? null);
             @endphp
-            <a class="directory-card nozu-directory-card" href="{{ route('people.show', $slug) }}">
-                <span class="directory-avatar">
-                    @if($image)
-                        <x-responsive-image :src="$image" alt="" sizes="72px" :widths="[96, 160]" />
-                    @else
-                        {{ mb_substr($name, 0, 1) }}
-                    @endif
-                </span>
-                <span>
-                    <strong>{{ $name }}</strong>
-                    <small><i class="fa-solid fa-microphone-lines"></i> {{ $count }} çalışma</small>
-                </span>
-            </a>
+
+            @if ($slug)
+                <a
+                    class="directory-card nozu-directory-card"
+                    href="{{ route('people.show', ['slug' => $slug]) }}"
+                >
+                    <span class="directory-avatar">
+                        @if ($image)
+                            <img
+                                src="{{ $image }}"
+                                alt="{{ $name }}"
+                                width="72"
+                                height="72"
+                                loading="lazy"
+                                decoding="async"
+                            >
+                        @else
+                            {{ mb_substr($name, 0, 1) }}
+                        @endif
+                    </span>
+
+                    <span>
+                        <strong>{{ $name }}</strong>
+
+                        @if ($role)
+                            <small>{{ $role }}</small>
+                        @else
+                            <small>
+                                <i class="fa-solid fa-clapperboard" aria-hidden="true"></i>
+                                {{ number_format((int) $count, 0, ',', '.') }} seri
+                            </small>
+                        @endif
+                    </span>
+                </a>
+            @endif
         @endforeach
     </section>
 
-    @if(method_exists($people, 'links'))
+    @if (method_exists($people, 'links'))
         {{ $people->links() }}
     @endif
 @endsection

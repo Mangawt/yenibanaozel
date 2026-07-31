@@ -823,3 +823,826 @@ html body .site-footer.minimal-footer .footer-brand .android-soon i {
         grid-area: season !important;
     }
 }
+
+
+/* =========================================================
+   Nozu kullanıcı menüsü ve hesap ayarları
+   ========================================================= */
+
+.user-dropdown {
+    width: 270px;
+    padding: 10px;
+    overflow: hidden;
+}
+
+.user-dropdown-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 11px 12px 13px;
+}
+
+.user-dropdown-header strong {
+    overflow: hidden;
+    color: var(--text, #211c29);
+    font-size: 0.9rem;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-dropdown-header span {
+    overflow: hidden;
+    color: var(--muted, #817a8a);
+    font-size: 0.76rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-dropdown-links {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.user-dropdown-links a,
+.user-dropdown-logout {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 43px;
+    gap: 11px;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: var(--text, #302837);
+    font: inherit;
+    font-size: 0.84rem;
+    font-weight: 750;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease;
+}
+
+.user-dropdown-links a i,
+.user-dropdown-logout i {
+    width: 19px;
+    color: #6c4dff;
+    font-size: 0.96rem;
+    text-align: center;
+}
+
+.user-dropdown-links a:hover,
+.user-dropdown-links a.active {
+    background: #f0ecff;
+    color: #5a3ce8;
+}
+
+.user-dropdown-divider {
+    height: 1px;
+    margin: 8px 4px;
+    background: rgba(117, 105, 133, 0.16);
+}
+
+.user-dropdown form {
+    margin: 0;
+}
+
+.user-dropdown-logout {
+    color: #c9364b;
+}
+
+.user-dropdown-logout i {
+    color: #d94a5a;
+}
+
+.user-dropdown-logout:hover {
+    background: #fff0f2;
+}
+
+/* Ayarlar sayfası */
+
+.settings-page {
+    width: min(760px, 100%);
+    margin: 0 auto;
+    padding: 10px 0 50px;
+}
+
+.settings-page-header {
+    display: flex;
+    align-items: center;
+    gap: 17px;
+    margin-bottom: 22px;
+}
+
+.settings-page-icon {
+    display: grid;
+    width: 54px;
+    height: 54px;
+    flex: 0 0 54px;
+    place-items: center;
+    border-radius: 17px;
+    background: #ede8ff;
+    color: #6c4dff;
+    font-size: 1.3rem;
+}
+
+.settings-page-header .eyebrow {
+    margin: 0 0 2px;
+}
+
+.settings-page-header h1 {
+    margin: 0;
+    color: var(--text, #211c29);
+    font-size: clamp(1.65rem, 4vw, 2.15rem);
+}
+
+.settings-page-header p:last-child {
+    margin: 5px 0 0;
+    color: var(--muted, #817a8a);
+    font-size: 0.88rem;
+    line-height: 1.55;
+}
+
+.settings-profile-summary {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 28px;
+    padding: 16px;
+    border: 1px solid rgba(118, 105, 135, 0.15);
+    border-radius: 19px;
+    background: var(--surface, #ffffff);
+    box-shadow: 0 9px 28px rgba(31, 22, 42, 0.05);
+}
+
+.settings-profile-avatar {
+    display: grid;
+    width: 54px;
+    height: 54px;
+    flex: 0 0 54px;
+    overflow: hidden;
+    place-items: center;
+    border-radius: 50%;
+    background: #ede8ff;
+    color: #6c4dff;
+    font-size: 1.2rem;
+    font-weight: 900;
+}
+
+.settings-profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.settings-profile-info {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+}
+
+.settings-profile-info strong,
+.settings-profile-info span,
+.settings-profile-info small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.settings-profile-info strong {
+    color: var(--text, #211c29);
+    font-size: 0.95rem;
+    font-weight: 850;
+}
+
+.settings-profile-info span {
+    margin-top: 1px;
+    color: #6c4dff;
+    font-size: 0.76rem;
+    font-weight: 750;
+}
+
+.settings-profile-info small {
+    margin-top: 3px;
+    color: var(--muted, #817a8a);
+    font-size: 0.72rem;
+}
+
+.settings-profile-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 41px;
+    gap: 7px;
+    padding: 9px 13px;
+    border: 1px solid rgba(108, 77, 255, 0.2);
+    border-radius: 12px;
+    background: #f2efff;
+    color: #6042e8;
+    font-size: 0.76rem;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.settings-section {
+    margin-top: 27px;
+}
+
+.settings-section-heading {
+    margin-bottom: 11px;
+    padding: 0 4px;
+}
+
+.settings-section-heading h2 {
+    margin: 0;
+    color: var(--text, #211c29);
+    font-size: 1.06rem;
+    font-weight: 850;
+}
+
+.settings-section-heading p {
+    margin: 4px 0 0;
+    color: var(--muted, #817a8a);
+    font-size: 0.76rem;
+}
+
+.settings-list {
+    overflow: hidden;
+    border: 1px solid rgba(118, 105, 135, 0.15);
+    border-radius: 19px;
+    background: var(--surface, #ffffff);
+    box-shadow: 0 8px 25px rgba(31, 22, 42, 0.04);
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 76px;
+    gap: 13px;
+    padding: 14px 16px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+}
+
+.settings-row:hover {
+    background: rgba(108, 77, 255, 0.045);
+}
+
+.settings-row-icon {
+    display: grid;
+    width: 43px;
+    height: 43px;
+    flex: 0 0 43px;
+    place-items: center;
+    border-radius: 13px;
+    background: #ede8ff;
+    color: #6c4dff;
+    font-size: 1rem;
+}
+
+.settings-row-content {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.settings-row-content strong {
+    color: var(--text, #2d2634);
+    font-size: 0.85rem;
+    font-weight: 850;
+}
+
+.settings-row-content small {
+    color: var(--muted, #898291);
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.settings-row-arrow {
+    color: #aaa3b1;
+    font-size: 0.76rem;
+}
+
+.settings-row-divider {
+    height: 1px;
+    margin-left: 72px;
+    background: rgba(118, 105, 135, 0.13);
+}
+
+.settings-row-danger .settings-row-icon {
+    background: #ffe9ec;
+    color: #d94a5a;
+}
+
+.settings-row-danger .settings-row-content strong {
+    color: #cf354a;
+}
+
+.settings-row-danger:hover {
+    background: #fff5f6;
+}
+
+/* Hesap silme alanı */
+
+.delete-account-panel {
+    scroll-margin-top: 110px;
+    margin-top: 25px;
+    padding: 20px;
+    border: 1px solid rgba(217, 74, 90, 0.24);
+    border-radius: 20px;
+    background: var(--surface, #ffffff);
+    box-shadow: 0 10px 30px rgba(76, 25, 38, 0.06);
+}
+
+.delete-account-warning {
+    display: flex;
+    gap: 13px;
+    padding: 16px;
+    border: 1px solid #ffd0d6;
+    border-radius: 16px;
+    background: #ffedef;
+}
+
+.delete-account-warning-icon {
+    display: grid;
+    width: 41px;
+    height: 41px;
+    flex: 0 0 41px;
+    place-items: center;
+    border-radius: 13px;
+    background: #ffffff;
+    color: #d94a5a;
+}
+
+.delete-account-warning strong {
+    color: #98283a;
+    font-size: 0.9rem;
+    font-weight: 900;
+}
+
+.delete-account-warning p {
+    margin: 5px 0 0;
+    color: #8b3d49;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.delete-account-data {
+    margin-top: 17px;
+    padding: 17px;
+    border: 1px solid rgba(118, 105, 135, 0.14);
+    border-radius: 16px;
+}
+
+.delete-account-data h3,
+.delete-account-form h3 {
+    margin: 0;
+    color: var(--text, #211c29);
+    font-size: 0.95rem;
+    font-weight: 850;
+}
+
+.delete-account-data ul {
+    display: grid;
+    gap: 9px;
+    margin: 14px 0;
+    padding: 0;
+    list-style: none;
+}
+
+.delete-account-data li {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--muted, #625a69);
+    font-size: 0.77rem;
+    font-weight: 650;
+}
+
+.delete-account-data li i {
+    width: 16px;
+    color: #d94a5a;
+    text-align: center;
+}
+
+.delete-account-note {
+    margin: 15px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid rgba(118, 105, 135, 0.13);
+    color: var(--muted, #817985);
+    font-size: 0.72rem;
+    line-height: 1.55;
+}
+
+.delete-account-form {
+    margin-top: 17px;
+    padding: 17px;
+    border: 1px solid rgba(118, 105, 135, 0.14);
+    border-radius: 16px;
+}
+
+.delete-account-form > p {
+    margin: 5px 0 16px;
+    color: var(--muted, #817985);
+    font-size: 0.75rem;
+}
+
+.delete-account-form label > span {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--text, #302837);
+    font-size: 0.78rem;
+    font-weight: 750;
+}
+
+.password-input-wrap {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    border: 1px solid rgba(118, 105, 135, 0.2);
+    border-radius: 13px;
+    background: rgba(118, 105, 135, 0.035);
+}
+
+.password-input-wrap > i {
+    margin-left: 14px;
+    color: #8e8598;
+}
+
+.password-input-wrap input {
+    min-width: 0;
+    flex: 1;
+    border: 0 !important;
+    outline: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.password-visibility-toggle {
+    display: grid;
+    width: 46px;
+    align-self: stretch;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: #8e8598;
+    cursor: pointer;
+}
+
+.delete-account-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 15px;
+    cursor: pointer;
+}
+
+.delete-account-checkbox input {
+    width: 18px;
+    height: 18px;
+    accent-color: #d94a5a;
+}
+
+.delete-account-checkbox span {
+    margin: 0 !important;
+    font-size: 0.8rem !important;
+}
+
+.delete-account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.delete-account-submit,
+.delete-account-cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 45px;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 13px;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 850;
+    cursor: pointer;
+}
+
+.delete-account-submit {
+    border: 1px solid #d94a5a;
+    background: #d94a5a;
+    color: #ffffff;
+}
+
+.delete-account-submit:hover {
+    background: #c93b4d;
+}
+
+.delete-account-cancel {
+    border: 1px solid rgba(118, 105, 135, 0.2);
+    background: var(--surface, #ffffff);
+    color: var(--text, #302837);
+}
+
+/* Son onay penceresi */
+
+.delete-modal-open {
+    overflow: hidden;
+}
+
+.delete-account-modal {
+    position: fixed;
+    z-index: 9999;
+    inset: 0;
+    display: grid;
+    padding: 20px;
+    place-items: center;
+}
+
+.delete-account-modal[hidden] {
+    display: none;
+}
+
+.delete-account-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(20, 15, 25, 0.58);
+    backdrop-filter: blur(4px);
+}
+
+.delete-account-modal-card {
+    position: relative;
+    width: min(430px, 100%);
+    padding: 25px;
+    border-radius: 22px;
+    background: var(--surface, #ffffff);
+    box-shadow: 0 25px 80px rgba(17, 11, 24, 0.28);
+    text-align: center;
+}
+
+.delete-account-modal-icon {
+    display: grid;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 15px;
+    place-items: center;
+    border-radius: 18px;
+    background: #ffedef;
+    color: #d94a5a;
+    font-size: 1.45rem;
+}
+
+.delete-account-modal-card h2 {
+    margin: 0;
+    color: var(--text, #211c29);
+    font-size: 1.2rem;
+    font-weight: 900;
+}
+
+.delete-account-modal-card p {
+    margin: 10px 0 20px;
+    color: var(--muted, #6c6472);
+    font-size: 0.82rem;
+    line-height: 1.6;
+}
+
+.delete-account-modal-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.form-error {
+    margin: 7px 0 0;
+    color: #ca3549;
+    font-size: 0.74rem;
+    font-weight: 750;
+}
+
+@media (max-width: 700px) {
+    .settings-page {
+        padding-top: 0;
+    }
+
+    .settings-page-header {
+        align-items: flex-start;
+    }
+
+    .settings-profile-summary {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .settings-profile-info {
+        width: calc(100% - 68px);
+        flex: none;
+    }
+
+    .settings-profile-edit {
+        width: 100%;
+    }
+
+    .settings-row {
+        min-height: 72px;
+        padding: 13px;
+    }
+
+    .settings-row-content small {
+        padding-right: 2px;
+    }
+
+    .delete-account-panel {
+        padding: 14px;
+    }
+
+    .delete-account-warning {
+        padding: 14px;
+    }
+
+    .delete-account-actions,
+    .delete-account-modal-actions {
+        flex-direction: column;
+    }
+
+    .delete-account-submit,
+    .delete-account-cancel {
+        width: 100%;
+    }
+}
+
+
+/* Hesap ayarları sayfası yazı renk düzeltmesi */
+.settings-page,
+.settings-page h1,
+.settings-page h2,
+.settings-page h3,
+.settings-page strong,
+.settings-page label,
+.settings-page .settings-row,
+.settings-page .settings-row-content strong,
+.settings-page .settings-profile-info strong,
+.settings-page .delete-account-form label > span,
+.settings-page .delete-account-modal-card h2 {
+    color: #211c29;
+}
+
+.settings-page p,
+.settings-page small,
+.settings-page .settings-page-header p,
+.settings-page .settings-section-heading p,
+.settings-page .settings-row-content small,
+.settings-page .settings-profile-info small,
+.settings-page .delete-account-form > p,
+.settings-page .delete-account-modal-card p,
+.settings-page .delete-account-note {
+    color: #817a8a;
+}
+
+.settings-page .settings-profile-info span {
+    color: #6c4dff;
+}
+
+.settings-page .settings-row-danger .settings-row-content strong,
+.settings-page .form-error {
+    color: #cf354a;
+}
+
+.settings-page .delete-account-warning strong {
+    color: #98283a;
+}
+
+.settings-page .delete-account-warning p {
+    color: #8b3d49;
+}
+
+.settings-page input {
+    color: #211c29;
+    caret-color: #6c4dff;
+}
+
+.settings-page input::placeholder {
+    color: #9b94a2;
+}
+
+.settings-page .delete-account-cancel {
+    color: #302837;
+}
+
+
+/* Google ile giriş ve kayıt */
+.google-auth-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 50px;
+    gap: 11px;
+    margin-top: 18px;
+    padding: 11px 16px;
+    border: 1px solid #dcd7e2;
+    border-radius: 13px;
+    background: #ffffff;
+    color: #28222f;
+    font-size: 0.9rem;
+    font-weight: 800;
+    text-decoration: none;
+    transition:
+        border-color 150ms ease,
+        background-color 150ms ease,
+        box-shadow 150ms ease;
+}
+
+.google-auth-button:hover {
+    border-color: #bdb5c8;
+    background: #faf9fc;
+    box-shadow: 0 5px 16px rgba(35, 27, 45, 0.08);
+}
+
+.google-auth-button svg {
+    flex: 0 0 auto;
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 19px 0;
+    color: #8a8291;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    height: 1px;
+    flex: 1;
+    background: rgba(118, 105, 135, 0.18);
+    content: "";
+}
+
+
+/* Google ile hesap silme doğrulaması */
+.google-delete-button {
+    margin-top: 14px;
+}
+
+.google-delete-verified {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 15px;
+    padding: 14px;
+    border: 1px solid #bde8cc;
+    border-radius: 14px;
+    background: #edf9f1;
+}
+
+.google-delete-verified > i {
+    color: #279653;
+    font-size: 1.3rem;
+}
+
+.google-delete-verified > div {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.google-delete-verified strong {
+    color: #176f3b !important;
+    font-size: 0.82rem;
+    font-weight: 850;
+}
+
+.google-delete-verified span {
+    color: #4e765e;
+    font-size: 0.72rem;
+    font-weight: 650;
+}
+
+.delete-account-submit:disabled {
+    border-color: #e2aab2;
+    background: #e2aab2;
+    cursor: not-allowed;
+    opacity: 0.72;
+}

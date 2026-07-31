@@ -20,7 +20,7 @@
                         <article class="user-admin-row">
                             <div class="directory-admin-avatar">
                                 @if($user->avatar_path)
-                                    <img src="{{ asset('storage/'.$user->avatar_path) }}" alt="{{ $user->username }}">
+                                    <img src="{{ app(\App\Services\UserMediaStorage::class)->url($user->avatar_path) }}" alt="{{ $user->username }}">
                                 @else
                                     <span>{{ mb_substr($user->username ?: $user->email, 0, 1) }}</span>
                                 @endif

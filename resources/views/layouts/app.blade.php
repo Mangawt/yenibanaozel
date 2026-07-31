@@ -88,17 +88,44 @@
             <div class="user-menu">
                 <button class="avatar-link" type="button" aria-label="Profil menüsü">
                     @if(auth()->user()->avatar_path)
-                        <img src="{{ asset('storage/'.auth()->user()->avatar_path) }}" alt="{{ auth()->user()->username }}">
+                        <img src="{{ app(\App\Services\UserMediaStorage::class)->url(auth()->user()->avatar_path) }}" alt="{{ auth()->user()->username }}">
                     @else
                         <span>{{ mb_substr(auth()->user()->username ?: 'N', 0, 1) }}</span>
                     @endif
                 </button>
                 <div class="user-dropdown">
-                    <a href="{{ route('profile.edit') }}">Profil</a>
-                    <a href="{{ route('profile.list') }}">Okuma listem</a>
+                    <div class="user-dropdown-links">
+                        <a href="{{ route('profile.show', auth()->user()->username) }}">
+                            <i class="fa-regular fa-user"></i>
+                            <span>Profilim</span>
+                        </a>
+
+                        <a href="{{ route('profile.list') }}">
+                            <i class="fa-regular fa-bookmark"></i>
+                            <span>Listem</span>
+                        </a>
+
+                        <a
+                            class="{{ request()->routeIs('account.settings') ? 'active' : '' }}"
+                            href="{{ route('account.settings') }}"
+                        >
+                            <i class="fa-solid fa-gear"></i>
+                            <span>Ayarlar</span>
+                        </a>
+                    </div>
+
+                    <div class="user-dropdown-divider"></div>
+
                     <form method="post" action="{{ route('logout') }}">
                         @csrf
-                        <button>Çıkış</button>
+
+                        <button
+                            type="submit"
+                            class="user-dropdown-logout"
+                        >
+                            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                            <span>Çıkış Yap</span>
+                        </button>
                     </form>
                 </div>
             </div>
@@ -146,6 +173,7 @@
             <a href="{{ route('about') }}">Hakkımızda</a>
             <a href="{{ route('privacy') }}">Gizlilik Politikası</a>
             <a href="{{ route('terms') }}">Kullanım Şartları</a>
+            <a href="{{ route('account-deletion') }}">Hesap Silme</a>
             <a href="{{ route('contact') }}">İletişim</a>
         </nav>
     </div>

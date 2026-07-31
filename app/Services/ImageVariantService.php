@@ -8,7 +8,16 @@ use Illuminate\Support\Facades\Log;
 class ImageVariantService
 {
     /**
-     * @return array<int, array{path: string, contents: string, content_type: string}>
+     * Görsel varyantlarını bellekte oluşturur.
+     *
+     * Buradaki varyantlar yerel diske yazılmaz. ağıran servis,
+     * Bunny etkinse içerikleri doğrudan Bunny Storage'a yükler.
+     *
+     * @return array<int, array{
+     *     path: string,
+     *     contents: string,
+     *     content_type: string
+     * }>
      */
     public function createVariants(
         Filesystem $disk,
@@ -42,7 +51,11 @@ class ImageVariantService
                     continue;
                 }
 
-                $height = max(1, (int) round($sourceHeight * ($width / $sourceWidth)));
+                $height = max(
+                    1,
+                    (int) round($sourceHeight * ($width / $sourceWidth))
+                );
+
                 $variant = imagecreatetruecolor($width, $height);
 
                 if ($variant === false) {
@@ -66,22 +79,27 @@ class ImageVariantService
                 );
 
                 ob_start();
-                $success = @imagewebp($variant, null, 82);
+
+                $success = @imagewebp(
+                    $variant,
+                    null,
+                    82
+                );
+
                 $body = ob_get_clean();
+
                 imagedestroy($variant);
 
-                if (! $success || ! is_string($body) || strlen($body) < 512) {
+                if (
+                    ! $success
+                    || ! is_string($body)
+                    || strlen($body) < 512
+                ) {
                     continue;
                 }
 
-                $path = $this->variantPath($storagePath, $width);
-
-                if (! $disk->exists($path)) {
-                    $disk->put($path, $body);
-                }
-
                 $variants[] = [
-                    'path' => $path,
+                    'path' => $this->variantPath($storagePath, $width),
                     'contents' => $body,
                     'content_type' => 'image/webp',
                 ];
@@ -89,10 +107,13 @@ class ImageVariantService
 
             return $variants;
         } catch (\Throwable $exception) {
-            Log::channel('import')->warning('Responsive image variant olusturulamadi.', [
-                'storage_path' => $storagePath,
-                'exception' => $exception->getMessage(),
-            ]);
+            Log::channel('import')->warning(
+                'Responsive image variant olusturulamadi.',
+                [
+                    'storage_path' => $storagePath,
+                    'exception' => $exception->getMessage(),
+                ]
+            );
 
             return [];
         } finally {
@@ -103,6 +124,7 @@ class ImageVariantService
     public function variantPath(string $storagePath, int $width): string
     {
         $extension = pathinfo($storagePath, PATHINFO_EXTENSION);
+
         $base = $extension !== ''
             ? substr($storagePath, 0, -strlen($extension) - 1)
             : $storagePath;

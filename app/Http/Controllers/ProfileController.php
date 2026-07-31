@@ -3,12 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\UserMediaStorage;
 use App\Services\Settings;
 use App\Support\Seo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
+use Throwable;
 
 class ProfileController extends Controller
 {
@@ -25,41 +26,133 @@ class ProfileController extends Controller
     {
         $user = $request->user();
         $rules = [
-            'bio' => ['nullable', 'string', 'max:500'],
-            'theme' => ['required', 'in:dark,light,system'],
-            'avatar' => ['nullable', 'image', 'max:2048'],
-            'social_links.instagram' => ['nullable', 'url', 'max:180'],
-            'social_links.facebook' => ['nullable', 'url', 'max:180'],
-            'social_links.discord' => ['nullable', 'string', 'max:80'],
-            'social_links.x' => ['nullable', 'url', 'max:180'],
-            'social_links.youtube' => ['nullable', 'url', 'max:180'],
-            'social_links.website' => ['nullable', 'url', 'max:180'],
+            'name' => [
+                'required',
+                'string',
+                'min:2',
+                'max:80',
+            ],
+            'bio' => [
+                'nullable',
+                'string',
+                'max:500',
+            ],
+            'theme' => [
+                'required',
+                'in:dark,light,system',
+            ],
+            'avatar' => [
+                'nullable',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:4096',
+            ],
+            'social_links.instagram' => [
+                'nullable',
+                'url',
+                'max:180',
+            ],
+            'social_links.facebook' => [
+                'nullable',
+                'url',
+                'max:180',
+            ],
+            'social_links.discord' => [
+                'nullable',
+                'string',
+                'max:80',
+            ],
+            'social_links.x' => [
+                'nullable',
+                'url',
+                'max:180',
+            ],
+            'social_links.youtube' => [
+                'nullable',
+                'url',
+                'max:180',
+            ],
+            'social_links.website' => [
+                'nullable',
+                'url',
+                'max:180',
+            ],
         ];
 
-        if (in_array($user->role, ['admin', 'super_admin'], true)) {
-            $rules['username'] = ['required', 'alpha_dash', 'min:3', 'max:40', Rule::unique('users', 'username')->ignore($user->id)];
-        }
+        $validated = $request->validate(
+            $rules,
+        );
 
-        $validated = $request->validate($rules);
+        /*
+         * Kullanıcı adı web profil formundan değitirilemez.
+         * Request içine elle username eklense bile kayda alınmaz.
+         */
+        unset(
+            $validated['username'],
+        );
 
-        if (! in_array($user->role, ['admin', 'super_admin'], true)) {
-            unset($validated['username']);
-        }
+        $validated['name'] = trim(
+            $validated['name'],
+        );
 
-        $validated['name'] = $user->username ?: $user->name;
+        $validated['bio'] = isset(
+            $validated['bio'],
+        )
+            ? trim($validated['bio'])
+            : null;
         $validated['social_links'] = collect($validated['social_links'] ?? [])
             ->map(fn ($value) => is_string($value) ? trim($value) : $value)
             ->filter()
             ->all();
 
+        $storage = app(
+            UserMediaStorage::class,
+        );
+
+        $oldAvatarPath = $user->avatar_path;
+        $newAvatarPath = null;
+
         if ($request->hasFile('avatar')) {
-            $validated['avatar_path'] = $request->file('avatar')->store('avatars', 'public');
+            $newAvatarPath = $storage->uploadAvatar(
+                $request->file('avatar'),
+                (int) $user->id,
+            );
+
+            $validated['avatar_path'] =
+                $newAvatarPath;
         }
 
         unset($validated['avatar']);
-        $user->update($validated);
 
-        return back()->with('status', 'Profil güncellendi.');
+        try {
+            $user->update($validated);
+        } catch (Throwable $exception) {
+            if ($newAvatarPath !== null) {
+                $storage->delete(
+                    $newAvatarPath,
+                );
+            }
+
+            throw $exception;
+        }
+
+        /*
+         * Yeni avatar başarıyla Bunny'ye yüklendikten ve
+         * kullanıcı kaydı güncellendikten sonra eski dosya silinir.
+         */
+        if (
+            $newAvatarPath !== null
+            && $oldAvatarPath !== $newAvatarPath
+        ) {
+            $storage->delete(
+                $oldAvatarPath,
+            );
+        }
+
+        return back()->with(
+            'status',
+            'Profil güncellendi.',
+        );
     }
 
     public function show(string $username, Settings $settings)

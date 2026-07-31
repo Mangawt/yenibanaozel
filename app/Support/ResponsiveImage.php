@@ -26,6 +26,11 @@ class ResponsiveImage
 
         foreach ($widths as $width) {
             $width = (int) $width;
+
+            if ($width < 16) {
+                continue;
+            }
+
             $variant = self::variantUrl($src, $width);
 
             if ($variant === null) {
@@ -45,15 +50,24 @@ class ResponsiveImage
         if ($path !== null) {
             $variantPath = self::variantPath($path, $width);
 
-            return Storage::disk('public')->exists($variantPath)
-                ? Storage::url($variantPath)
-                : null;
+            if (! Storage::disk('public')->exists($variantPath)) {
+                return null;
+            }
+
+            return Storage::url($variantPath);
         }
 
+        /*
+         * Bunny CDN URL’lerinde varyantın gerçekten mevcut olduğunu
+         * doğrulamadan tahmini bir -{width}w.webp URL’si üretmiyoruz.
+         *
+         * Varyant manifesti veya Bunny Storage exists kontrolü
+         * eklendiğinde bu bölüm tekrar güvenli şekilde açılabilir.
+         */
         $cdnUrl = rtrim((string) config('services.bunny.cdn_url'), '/');
 
         if ($cdnUrl !== '' && Str::startsWith($src, $cdnUrl.'/')) {
-            return self::replaceExtension($src, $width);
+            return null;
         }
 
         return null;
@@ -67,10 +81,19 @@ class ResponsiveImage
             return ltrim(Str::after($path, '/storage/'), '/');
         }
 
-        $storageUrl = parse_url((string) config('filesystems.disks.public.url'), PHP_URL_PATH);
+        $storageUrl = parse_url(
+            (string) config('filesystems.disks.public.url'),
+            PHP_URL_PATH
+        );
 
-        if ($storageUrl && Str::startsWith($path, rtrim($storageUrl, '/').'/')) {
-            return ltrim(Str::after($path, rtrim($storageUrl, '/').'/'), '/');
+        if (
+            $storageUrl
+            && Str::startsWith($path, rtrim($storageUrl, '/').'/')
+        ) {
+            return ltrim(
+                Str::after($path, rtrim($storageUrl, '/').'/'),
+                '/'
+            );
         }
 
         return null;
@@ -79,22 +102,11 @@ class ResponsiveImage
     public static function variantPath(string $path, int $width): string
     {
         $extension = pathinfo($path, PATHINFO_EXTENSION);
+
         $base = $extension !== ''
             ? substr($path, 0, -strlen($extension) - 1)
             : $path;
 
         return $base.'-'.$width.'w.webp';
-    }
-
-    private static function replaceExtension(string $src, int $width): string
-    {
-        $query = parse_url($src, PHP_URL_QUERY);
-        $clean = $query ? Str::before($src, '?') : $src;
-        $extension = pathinfo(parse_url($clean, PHP_URL_PATH) ?: '', PATHINFO_EXTENSION);
-        $base = $extension !== ''
-            ? substr($clean, 0, -strlen($extension) - 1)
-            : $clean;
-
-        return $base.'-'.$width.'w.webp'.($query ? '?'.$query : '');
     }
 }

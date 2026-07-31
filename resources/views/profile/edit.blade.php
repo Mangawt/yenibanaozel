@@ -5,26 +5,76 @@
         <aside class="profile-card">
             <div class="profile-avatar">
                 @if($user->avatar_path)
-                    <img src="{{ asset('storage/'.$user->avatar_path) }}" alt="{{ $user->username }}">
+                    <img src="{{ app(\App\Services\UserMediaStorage::class)->url($user->avatar_path) }}" alt="{{ $user->username }}">
                 @else
                     <span>{{ mb_substr($user->username ?: 'N', 0, 1) }}</span>
                 @endif
             </div>
-            <h1>{{ '@'.$user->username }}</h1>
-            <a class="button" href="{{ route('profile.show', $user->username) }}">Profili gör</a>
+            <h1>{{ $user->name ?: '@'.$user->username }}</h1>
+            <p>{{ '@'.$user->username }}</p>
+
+            <a
+                class="button"
+                href="{{ route('profile.show', $user->username) }}"
+            >
+                Profili gör
+            </a>
         </aside>
 
         <form class="profile-form" method="post" action="{{ route('profile.update') }}" enctype="multipart/form-data">
             @csrf
             <h2>Profil ayarları</h2>
 
-            @if(in_array($user->role, ['admin', 'super_admin'], true))
-                <label>Kullanıcı adı<input name="username" value="{{ old('username', $user->username) }}" required></label>
-            @else
-                <label>Kullanıcı adı<input value="{{ $user->username }}" disabled></label>
-            @endif
+            <label>
+        return $this->permanentlyDeleteUser(nen ad
 
-            <label>Hakkımda<textarea name="bio" rows="5">{{ old('bio', $user->bio) }}</textarea></label>
+                <input
+                    type="text"
+                    name="name"
+                    value="{{ old('name', $user->name) }}"
+                    minlength="2"
+                    maxlength="80"
+                    required
+                >
+
+                @error('name')
+                    <small class="form-error">
+                        {{ $message }}
+                    </small>
+                @enderror
+            </label>
+
+            <label>
+                Kullanıcı adı
+
+                <input
+                    type="text"
+                    value="{{ $user->username }}"
+                    disabled
+                    readonly
+                >
+
+                <small>
+                    Kullanıcı adın profil bağlantılarında ve
+                    @etiketlemelerde kullanıldığı iin değiştirilemez.
+                </small>
+            </label>
+
+            <label>
+                Hakkımda
+
+                <textarea
+                    name="bio"
+                    rows="5"
+                    maxlength="500"
+                >{{ old('bio', $user->bio) }}</textarea>
+
+                @error('bio')
+                    <small class="form-error">
+                        {{ $message }}
+                    </small>
+                @enderror
+            </label>
             <div class="profile-social-fields">
                 <h3>Sosyal bağlantılar</h3>
                 <label>Instagram<input name="social_links[instagram]" value="{{ old('social_links.instagram', $user->social_links['instagram'] ?? '') }}" placeholder="https://instagram.com/kullanici"></label>
@@ -45,4 +95,6 @@
             <button class="button primary">Kaydet</button>
         </form>
     </section>
+
+
 @endsection

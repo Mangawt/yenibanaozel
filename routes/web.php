@@ -7,22 +7,68 @@ use App\Http\Controllers\ApiController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CharacterController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\PersonController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SeoController;
 use App\Http\Controllers\SocialController;
 use App\Http\Controllers\StudioController;
+use App\Http\Controllers\WebAccountController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/ara', [HomeController::class, 'search'])->name('search');
 Route::get('/api', [ApiController::class, 'docs'])->name('api.docs');
+Route::middleware('guest')->group(function (): void {
+    Route::get(
+        '/auth/google',
+        [GoogleAuthController::class, 'redirect'],
+    )
+        ->middleware('throttle:20,1')
+        ->name('auth.google.redirect');
+
+    Route::get(
+        '/auth/google/callback',
+        [GoogleAuthController::class, 'callback'],
+    )
+        ->middleware('throttle:20,1')
+        ->name('auth.google.callback');
+});
+
 Route::get('/giris', [AuthController::class, 'login'])->name('login');
 Route::post('/giris', [AuthController::class, 'authenticate'])->name('login.authenticate');
 Route::get('/kayit', [AuthController::class, 'register'])->name('register');
 Route::post('/kayit', [AuthController::class, 'store'])->name('register.store');
 Route::post('/cikis', [AuthController::class, 'logout'])->name('logout');
+Route::middleware('auth')->group(function (): void {
+    Route::get(
+        '/hesap-ayarlari',
+        [WebAccountController::class, 'edit'],
+    )->name('account.settings');
+
+    Route::get(
+        '/hesap-ayarlari/google-dogrula',
+        [GoogleAuthController::class, 'redirectAccountDeletion'],
+    )
+        ->middleware('throttle:10,1')
+        ->name('account.google.verify');
+
+    Route::get(
+        '/hesap-ayarlari/google/callback',
+        [GoogleAuthController::class, 'callbackAccountDeletion'],
+    )
+        ->middleware('throttle:10,1')
+        ->name('account.google.callback');
+
+    Route::delete(
+        '/hesap-ayarlari',
+        [WebAccountController::class, 'destroy'],
+    )
+        ->middleware('throttle:3,60')
+        ->name('account.destroy');
+});
+
 Route::get('/profil', [ProfileController::class, 'edit'])->middleware('auth')->name('profile.edit');
 Route::post('/profil', [ProfileController::class, 'update'])->middleware('auth')->name('profile.update');
 Route::get('/listem', [ProfileController::class, 'list'])->middleware('auth')->name('profile.list');
@@ -33,13 +79,23 @@ Route::get('/u/{username}/takip', [ProfileController::class, 'following'])->name
 Route::get('/hakkimizda', [PageController::class, 'about'])->name('about');
 Route::get('/gizlilik-politikasi', [PageController::class, 'privacy'])->name('privacy');
 Route::get('/kullanim-sartlari', [PageController::class, 'terms'])->name('terms');
+Route::get('/hesap-silme', [PageController::class, 'accountDeletion'])->name('account-deletion');
 Route::get('/cerez-politikasi', [PageController::class, 'cookies'])->name('cookies');
 Route::get('/telif-ve-icerik-kaldirma', [PageController::class, 'copyright'])->name('copyright');
 Route::get('/sorumluluk-reddi', [PageController::class, 'disclaimer'])->name('disclaimer');
 Route::get('/iletisim', [PageController::class, 'contact'])->name('contact');
 Route::get('/cerez-tercihleri', [PageController::class, 'cookiePreferences'])->name('cookie-preferences');
 Route::get('/robots.txt', [SeoController::class, 'robots'])->name('seo.robots');
-Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('seo.sitemap');
+Route::get('/sitemap.xml', [SeoController::class, 'sitemapIndex'])
+    ->name('seo.sitemap');
+
+Route::get('/sitemaps/static.xml', [SeoController::class, 'sitemapStatic'])
+    ->name('seo.sitemap.static');
+
+Route::get('/sitemaps/{type}-{page}.xml', [SeoController::class, 'sitemapMedia'])
+    ->whereIn('type', ['anime', 'manga'])
+    ->whereNumber('page')
+    ->name('seo.sitemap.media');
 Route::get('/autocomplete', [HomeController::class, 'autocomplete'])->name('autocomplete');
 Route::get('/karakterler', [CharacterController::class, 'index'])->name('characters.index');
 Route::get('/karakter/{slug}', [CharacterController::class, 'show'])->name('characters.show');

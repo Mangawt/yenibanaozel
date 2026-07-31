@@ -1,14 +1,14 @@
 <article class="comment-card">
     <div class="comment-avatar">
         @if($comment->user?->avatar_path)
-            <img src="{{ asset('storage/'.$comment->user->avatar_path) }}" alt="{{ $comment->user->username }}">
+            <img src="{{ app(\App\Services\UserMediaStorage::class)->url($comment->user?->avatar_path) }}" alt="{{ ($comment->user?->username ?? 'silinmis-kullanici') }}">
         @else
             <span>{{ mb_substr($comment->user?->username ?: 'N', 0, 1) }}</span>
         @endif
     </div>
     <div class="comment-body">
         <div class="comment-head">
-            <a href="{{ route('profile.show', $comment->user->username) }}">{{ '@'.$comment->user->username }}</a>
+            <a href="{{ route('profile.show', ($comment->user?->username ?? 'silinmis-kullanici')) }}">{{ '@'.($comment->user?->username ?? 'silinmis-kullanici') }}</a>
             <span>{{ $comment->created_at->diffForHumans() }}</span>
         </div>
         <p>{{ $comment->body }}</p>

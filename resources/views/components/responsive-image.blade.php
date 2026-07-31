@@ -1,11 +1,11 @@
 @props([
-    'src',
+    'src' => null,
     'alt' => '',
-    'class' => null,
-    'sizes' => '(max-width: 640px) 45vw, 180px',
     'loading' => 'lazy',
-    'fetchpriority' => null,
     'decoding' => 'async',
+    'width' => null,
+    'height' => null,
+    'sizes' => '100vw',
     'widths' => [],
 ])
 
@@ -13,13 +13,18 @@
     $srcset = \App\Support\ResponsiveImage::srcset($src, $widths);
 @endphp
 
-<img
-    src="{{ $src }}"
-    alt="{{ $alt }}"
-    @if($class) class="{{ $class }}" @endif
-    @if($srcset) srcset="{{ $srcset }}" sizes="{{ $sizes }}" @endif
-    loading="{{ $loading }}"
-    decoding="{{ $decoding }}"
-    @if($fetchpriority) fetchpriority="{{ $fetchpriority }}" @endif
-    {{ $attributes }}
->
+@if ($src)
+    <img
+        src="{{ $src }}"
+        alt="{{ $alt }}"
+        loading="{{ $loading }}"
+        decoding="{{ $decoding }}"
+        @if ($width) width="{{ $width }}" @endif
+        @if ($height) height="{{ $height }}" @endif
+        @if ($srcset)
+            srcset="{{ $srcset }}"
+            sizes="{{ $sizes }}"
+        @endif
+        {{ $attributes }}
+    >
+@endif

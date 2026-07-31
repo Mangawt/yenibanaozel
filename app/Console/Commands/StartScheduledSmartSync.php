@@ -2,8 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Models\SyncState;
 use App\Services\SmartSyncService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class StartScheduledSmartSync extends Command
@@ -12,82 +14,135 @@ class StartScheduledSmartSync extends Command
         {run_type : active|recent|decade|monthly}
         {type : anime|manga}';
 
-    protected $description = 'Planlı Smart Sync taraması başlatır; aktif duplicate varsa atlar.';
+    protected $description = 'Planlı Smart Sync taraması başlatır; herhangi bir aktif Smart Sync varsa atlar.';
 
     public function handle(SmartSyncService $sync): int
     {
-        $sync->cleanupCompleted(0);
-
         $runType = (string) $this->argument('run_type');
         $type = (string) $this->argument('type');
-        $year = (int) now()->year;
 
-        $options = match ($runType) {
-            'active' => [
-                'type' => $type,
-                'mode' => 'updates',
-                'scan_scope' => 'standard',
-                'scheduled_run_type' => 'active',
-                'sort' => 'POPULARITY_DESC',
-                'max_page' => 100,
-            ],
-            'recent' => [
-                'type' => $type,
-                'mode' => 'updates',
-                'scan_scope' => 'full_catalog',
-                'scheduled_run_type' => 'recent',
-                'start_year' => $year,
-                'end_year' => max(1900, $year - 2),
-                'sort' => 'POPULARITY_DESC',
-                'max_page' => 100,
-            ],
-            'decade' => [
-                'type' => $type,
-                'mode' => 'updates',
-                'scan_scope' => 'full_catalog',
-                'scheduled_run_type' => 'decade',
-                'start_year' => $year,
-                'end_year' => max(1900, $year - 10),
-                'sort' => 'POPULARITY_DESC',
-                'max_page' => 100,
-            ],
-            'monthly' => [
-                'type' => $type,
-                'mode' => 'updates',
-                'scan_scope' => 'full_catalog',
-                'scheduled_run_type' => 'monthly',
-                'start_year' => $year,
-                'end_year' => 1900,
-                'sort' => 'POPULARITY_DESC',
-                'max_page' => 100,
-            ],
-            default => throw new \InvalidArgumentException('Bilinmeyen scheduled run type.'),
-        };
+        /*
+         * Anime ve manga zamanlamaları aynı saniyede çalışabileceği için
+         * yalnızca bir komutun başlangıç kontrolü yapmasına izin veriyoruz.
+         */
+        $lock = Cache::lock('nozu:scheduled-smart-sync-global-start', 120);
 
-        $options += [
-            'source' => 'anilist',
-            'per_page' => 50,
-            'batch_size' => 1,
-            'update_stale_after_days' => 7,
-            'split_formats' => true,
-            'prioritize_active' => true,
-            'automatic' => true,
-        ];
+        if (! $lock->get()) {
+            $this->warn('Başka bir Smart Sync başlangıç kontrolü çalışıyor. Yeni tarama başlatılmadı.');
 
-        try {
-            $state = $sync->start($options);
-            $this->info("Smart Sync başlatıldı: #{$state->id}");
-
-            return self::SUCCESS;
-        } catch (\Throwable $exception) {
-            Log::channel('scanner')->info('Planlı Smart Sync başlatılamadı veya atlandı.', [
+            Log::channel('scanner')->info('Planlı Smart Sync global başlangıç kilidi nedeniyle atlandı.', [
                 'run_type' => $runType,
                 'type' => $type,
-                'message' => $exception->getMessage(),
             ]);
-            $this->warn($exception->getMessage());
 
             return self::SUCCESS;
+        }
+
+        try {
+            $sync->cleanupCompleted(0);
+
+            /*
+             * Herhangi bir aktif, rate-limit bekleyen veya duraklatılmış
+             * Smart Sync varsa yeni planlı tarama başlatma.
+             */
+            $activeState = SyncState::query()
+                ->whereIn('status', [
+                    SyncState::STATUS_RUNNING,
+                    SyncState::STATUS_WAITING_RATE_LIMIT,
+                    SyncState::STATUS_PAUSED,
+                ])
+                ->orderBy('id')
+                ->first();
+
+            if ($activeState) {
+                $message = "Aktif Smart Sync #{$activeState->id} bitmediği için yeni tarama başlatılmadı.";
+
+                $this->warn($message);
+
+                Log::channel('scanner')->info('Planlı Smart Sync, devam eden tarama nedeniyle atlandı.', [
+                    'run_type' => $runType,
+                    'type' => $type,
+                    'active_sync_id' => $activeState->id,
+                    'active_sync_status' => $activeState->status,
+                    'active_sync_type' => $activeState->type ?? null,
+                ]);
+
+                return self::SUCCESS;
+            }
+
+            $year = (int) now()->year;
+
+            $options = match ($runType) {
+                'active' => [
+                    'type' => $type,
+                    'mode' => 'updates',
+                    'scan_scope' => 'standard',
+                    'scheduled_run_type' => 'active',
+                    'sort' => 'POPULARITY_DESC',
+                    'max_page' => 100,
+                ],
+                'recent' => [
+                    'type' => $type,
+                    'mode' => 'updates',
+                    'scan_scope' => 'full_catalog',
+                    'scheduled_run_type' => 'recent',
+                    'start_year' => $year,
+                    'end_year' => max(1900, $year - 2),
+                    'sort' => 'POPULARITY_DESC',
+                    'max_page' => 100,
+                ],
+                'decade' => [
+                    'type' => $type,
+                    'mode' => 'updates',
+                    'scan_scope' => 'full_catalog',
+                    'scheduled_run_type' => 'decade',
+                    'start_year' => $year,
+                    'end_year' => max(1900, $year - 10),
+                    'sort' => 'POPULARITY_DESC',
+                    'max_page' => 100,
+                ],
+                'monthly' => [
+                    'type' => $type,
+                    'mode' => 'updates',
+                    'scan_scope' => 'full_catalog',
+                    'scheduled_run_type' => 'monthly',
+                    'start_year' => $year,
+                    'end_year' => 1900,
+                    'sort' => 'POPULARITY_DESC',
+                    'max_page' => 100,
+                ],
+                default => throw new \InvalidArgumentException('Bilinmeyen scheduled run type.'),
+            };
+
+            $options += [
+                'source' => 'anilist',
+                'per_page' => 50,
+                'batch_size' => 1,
+                'update_stale_after_days' => 7,
+                'split_formats' => true,
+                'prioritize_active' => true,
+                'automatic' => true,
+            ];
+
+            try {
+                $state = $sync->start($options);
+
+                $this->info("Smart Sync başlatıldı: #{$state->id}");
+
+                return self::SUCCESS;
+            } catch (\Throwable $exception) {
+                Log::channel('scanner')->info('Planlı Smart Sync başlatılamadı veya atlandı.', [
+                    'run_type' => $runType,
+                    'type' => $type,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                $this->warn($exception->getMessage());
+
+                return self::SUCCESS;
+            }
+        } finally {
+            $lock->release();
         }
     }
 }

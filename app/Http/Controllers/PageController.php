@@ -40,6 +40,18 @@ class PageController extends Controller
         );
     }
 
+
+    public function accountDeletion(Settings $settings)
+    {
+        return $this->legalView(
+            $settings,
+            'pages.account-deletion',
+            'Hesap ve Veri Silme - nozu.me',
+            'Nozu hesabı ve bağlantılı kullanıcı verileri için hesap silme talebi, silinen veriler ve veri saklama bilgileri.',
+            route('account-deletion')
+        );
+    }
+
     public function cookies(Settings $settings)
     {
         return $this->legalView(

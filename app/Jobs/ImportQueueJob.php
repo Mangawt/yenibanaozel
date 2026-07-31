@@ -42,7 +42,7 @@ class ImportQueueJob implements ShouldQueue
 
         return [
             (new WithoutOverlapping($key))
-                ->releaseAfter(30)
+                ->dontRelease()
                 ->expireAfter(600),
         ];
     }
@@ -54,7 +54,7 @@ class ImportQueueJob implements ShouldQueue
 
     public function retryUntil(): \DateTimeInterface
     {
-        return now()->addHours(12);
+        return now()->addDays(7);
     }
 
     public function handle(ExternalMediaService $external): void
