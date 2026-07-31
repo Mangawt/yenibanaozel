@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Services\UserMediaStorage;
 use App\Services\Settings;
+use App\Services\UserProfileStatsService;
 use App\Support\Seo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -155,8 +156,11 @@ class ProfileController extends Controller
         );
     }
 
-    public function show(string $username, Settings $settings)
-    {
+    public function show(
+        string $username,
+        Settings $settings,
+        UserProfileStatsService $statsService,
+    ) {
         $user = User::query()
             ->where('username', $username)
             ->withCount(['followers', 'following'])
@@ -191,6 +195,7 @@ class ProfileController extends Controller
             'favoritesManga' => $user->favoriteMedia()->wherePivot('status', 'favorite')->where('media.type', 'manga')->latest('media_lists.updated_at')->limit(4)->get(),
             'watchList' => $user->mediaList()->with('media')->where('status', '!=', 'favorite')->latest()->limit(10)->get(),
             'activities' => $activityFeed,
+            'animeStats' => $statsService->forUser($user),
             'isFollowing' => auth()->check() ? auth()->user()->following()->whereKey($user->id)->exists() : false,
             'seo' => Seo::defaults(['title' => '@'.$user->username.' - nozu.me']),
         ]);

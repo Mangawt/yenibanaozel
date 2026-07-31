@@ -24,7 +24,7 @@
                 <div>
                     <p class="eyebrow">Import Queue</p>
                     <h1>Production import sistemi</h1>
-                    <p>Her enqueue i�lemi Laravel Bus batch oluşturur; import arka planda tek worker ile güvenli şekilde yürür.</p>
+                    <p>Her enqueue işlemi Laravel Bus batch oluşturur; import arka planda tek worker ile güvenli şekilde yürür.</p>
                 </div>
                 <span class="queue-live">Queue worker</span>
             </section>
@@ -33,11 +33,30 @@
                 @foreach($labels as $key => $label)
                     <article><span>{{ $label }}</span><strong data-stat="{{ $key }}">{{ number_format($stats[$key] ?? 0, 0, ',', '.') }}</strong></article>
                 @endforeach
-                <article><span>Y�zde</span><strong data-stat="percent">{{ number_format($stats['percent'] ?? 0, 2, ',', '.') }}%</strong></article>
-                <article><span>Dakikadaki i�lem</span><strong data-stat="speed_per_minute">{{ number_format($stats['speed_per_minute'] ?? 0, 2, ',', '.') }}/dk</strong></article>
+                <article><span>Yüzde</span><strong data-stat="percent">{{ number_format($stats['percent'] ?? 0, 2, ',', '.') }}%</strong></article>
+                <article><span>Dakikadaki işlem</span><strong data-stat="speed_per_minute">{{ number_format($stats['speed_per_minute'] ?? 0, 2, ',', '.') }}/dk</strong></article>
                 <article><span>ETA</span><strong data-stat="eta_minutes">{{ $stats['eta_minutes'] ? $stats['eta_minutes'].' dk' : '-' }}</strong></article>
-                <article><span>�u an i�lenen</span><strong data-stat="current_series">{{ $stats['current_series'] ?? '-' }}</strong></article>
-                <article><span>Son i�lenen</span><strong data-stat="last_series">{{ $stats['last_series'] ?? '-' }}</strong></article>
+                <article><span>Şu an işlenen</span><strong data-stat="current_series">{{ $stats['current_series'] ?? '-' }}</strong></article>
+                <article><span>Son işlenen</span><strong data-stat="last_series">{{ $stats['last_series'] ?? '-' }}</strong></article>
+            </section>
+
+            <section class="panel">
+                <h2>Son eklenen içerik</h2>
+                @if($latestImportedMedia)
+                    <div class="queue-row">
+                        <div>
+                            <strong>
+                                {{ strtoupper($latestImportedMedia->type) }} ·
+                                <a href="{{ route('media.show', ['type' => $latestImportedMedia->type, 'media' => $latestImportedMedia]) }}" target="_blank" rel="noopener">
+                                    {{ $latestImportedMedia->title }}
+                                </a>
+                            </strong>
+                            <p>{{ $latestImportedMedia->created_at?->timezone(config('app.timezone'))->format('d.m.Y H:i') }} tarihinde siteye eklendi.</p>
+                        </div>
+                    </div>
+                @else
+                    <p class="muted">Henüz anime veya manga eklenmemiş.</p>
+                @endif
             </section>
 
             <section class="panel batch-panel">
@@ -53,7 +72,7 @@
             </section>
 
             <section class="panel">
-                <h2>Ke�if oluştur</h2>
+                <h2>Keşif oluştur</h2>
                 <form class="filters queue-form" method="post" action="{{ route('admin.import-queue.preview') }}">
                     @csrf
                     <select name="type">
@@ -61,43 +80,43 @@
                         <option value="manga">Manga</option>
                     </select>
                     <select name="sort">
-                        <option value="POPULARITY_DESC">Pop�lerlik</option>
+                        <option value="POPULARITY_DESC">Popülerlik</option>
                         <option value="TRENDING_DESC">Trend</option>
                         <option value="SCORE_DESC">Puan</option>
-                        <option value="START_DATE_DESC">Ba�lama tarihi</option>
+                        <option value="START_DATE_DESC">Başlama tarihi</option>
                     </select>
-                    <input name="genre" placeholder="T�r">
-                    <input type="number" name="year" placeholder="Y�l" min="1940" max="2100">
+                    <input name="genre" placeholder="Tür">
+                    <input type="number" name="year" placeholder="Yıl" min="1940" max="2100">
                     <select name="season">
                         <option value="">Sezon</option>
-                        <option value="WINTER">Kis</option>
-                        <option value="SPRING">Ilkbahar</option>
+                        <option value="WINTER">Kış</option>
+                        <option value="SPRING">İlkbahar</option>
                         <option value="SUMMER">Yaz</option>
                         <option value="FALL">Sonbahar</option>
                     </select>
-                    <input name="format" placeholder="Bi�im">
-                    <input type="number" name="page" value="1" min="1" title="Baslangic sayfasi">
+                    <input name="format" placeholder="Biçim">
+                    <input type="number" name="page" value="1" min="1" title="Başlangıç sayfası">
                     <input type="number" name="pages" value="10" min="1" max="100" title="Taranacak sayfa">
                     <input type="number" name="per_page" value="50" min="1" max="50" title="Sayfa başı kayıt">
-                    <textarea name="links" rows="4" placeholder="�ste�e ba�l�: Nozu kaynak linklerini veya ID'leri sat�r sat�r yap��t�r"></textarea>
-                    <button class="button primary">�nizle</button>
+                    <textarea name="links" rows="4" placeholder="İsteğe bağlı: Nozu kaynak linklerini veya ID'leri satır satır yapıştır"></textarea>
+                    <button class="button primary">Önizle</button>
                 </form>
             </section>
 
             @if($preview)
                 <section class="panel preview-panel">
-                    <h2>Kesif ozeti</h2>
+                    <h2>Keşif özeti</h2>
                     <div class="metric-grid compact">
                         <article><span>Bulunan</span><strong>{{ $preview['found'] }}</strong></article>
                         <article><span>Anime</span><strong>{{ $preview['anime'] ?? 0 }}</strong></article>
                         <article><span>Manga</span><strong>{{ $preview['manga'] ?? 0 }}</strong></article>
-                        <article><span>Veritabaninda var</span><strong>{{ $preview['existing_media'] }}</strong></article>
+                        <article><span>Veritabanında var</span><strong>{{ $preview['existing_media'] }}</strong></article>
                         <article><span>Kuyrukta var</span><strong>{{ $preview['existing_queue'] }}</strong></article>
                         <article><span>Yeni eklenecek</span><strong>{{ $preview['new'] }}</strong></article>
                     </div>
                     <form method="post" action="{{ route('admin.import-queue.enqueue') }}">
                         @csrf
-                        <button class="button primary">Kuyruga Ekle</button>
+                        <button class="button primary">Kuyruğa Ekle</button>
                     </form>
                 </section>
             @endif
@@ -106,13 +125,13 @@
                 <h2>Queue filtreleri</h2>
                 <form class="filters" method="get" action="{{ route('admin.import-queue') }}">
                     <select name="status">
-                        <option value="">Tum durumlar</option>
-                        @foreach(['pending', 'running', 'completed', 'failed', 'skipped'] as $status)
+                        <option value="">Tüm durumlar</option>
+                        @foreach(['pending', 'running', 'failed', 'skipped'] as $status)
                             <option value="{{ $status }}" @selected(request('status') === $status)>{{ ucfirst($status) }}</option>
                         @endforeach
                     </select>
                     <select name="type">
-                        <option value="">Tum turler</option>
+                        <option value="">Tüm türler</option>
                         <option value="anime" @selected(request('type') === 'anime')>Anime</option>
                         <option value="manga" @selected(request('type') === 'manga')>Manga</option>
                     </select>
@@ -124,21 +143,20 @@
                         <option value="newest" @selected(request('sort', 'newest') === 'newest')>En yeni</option>
                         <option value="oldest" @selected(request('sort') === 'oldest')>En eski</option>
                         <option value="status" @selected(request('sort') === 'status')>Durum</option>
-                        <option value="attempts" @selected(request('sort') === 'attempts')>Deneme sayisi</option>
-                        <option value="updated" @selected(request('sort') === 'updated')>Guncellenme</option>
+                        <option value="attempts" @selected(request('sort') === 'attempts')>Deneme sayısı</option>
+                        <option value="updated" @selected(request('sort') === 'updated')>Güncellenme</option>
                     </select>
                     <button class="button primary">Filtrele</button>
                 </form>
             </section>
 
             <section class="panel">
-                <h2>Toplu islemler</h2>
+                <h2>Toplu işlemler</h2>
                 <form class="filters" method="post" action="{{ route('admin.import-queue.action') }}">
                     @csrf
                     <select name="action" required>
-                        <option value="">Islem sec</option>
-                        <option value="retry_failed">T�m failed kay�tlar� retry et</option>
-                        <option value="clear_completed">Completed temizle</option>
+                        <option value="">İşlem seç</option>
+                        <option value="retry_failed">Tüm failed kayıtları retry et</option>
                         <option value="clear_failed">Failed temizle</option>
                         <option value="clear_skipped">Skipped temizle</option>
                         <option value="clear_pending">Pending iptal et</option>
@@ -148,7 +166,7 @@
             </section>
 
             <section class="panel">
-                <h2>Kuyruk kay�tlar�</h2>
+                <h2>Kuyruk kayıtları</h2>
                 <div class="queue-table">
                     @foreach($items as $item)
                         <article class="queue-row">

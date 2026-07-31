@@ -2,8 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Character;
+use App\Models\Media;
+use App\Models\Person;
 use App\Services\Settings;
 use App\Support\Seo;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class PageController extends Controller
 {
@@ -107,6 +112,42 @@ class PageController extends Controller
         );
     }
 
+    public function siteStats(Settings $settings)
+    {
+        $stats = [
+            $this->statsSeries(
+                'Anime',
+                Media::query()->where('type', 'anime'),
+                'fa-solid fa-tv',
+            ),
+            $this->statsSeries(
+                'Manga',
+                Media::query()->where('type', 'manga'),
+                'fa-solid fa-book-open',
+            ),
+            $this->statsSeries(
+                'Karakterler',
+                Character::query(),
+                'fa-regular fa-user',
+            ),
+            $this->statsSeries(
+                'Kişiler ve ekip',
+                Person::query(),
+                'fa-solid fa-user-group',
+            ),
+        ];
+
+        return view('pages.site-stats', [
+            'settings' => $settings->allPublic(),
+            'stats' => $stats,
+            'seo' => Seo::defaults([
+                'title' => 'Site İstatistikleri - nozu.me',
+                'description' => 'Nozu anime, manga, karakter ve kişi katalog istatistikleri.',
+                'canonical' => route('site-stats'),
+            ]),
+        ]);
+    }
+
     private function legalView(Settings $settings, string $view, string $title, string $description, string $canonical)
     {
         return view($view, [
@@ -117,5 +158,64 @@ class PageController extends Controller
                 'canonical' => $canonical,
             ]),
         ]);
+    }
+
+    private function statsSeries(string $label, Builder $query, string $icon): array
+    {
+        $dates = collect(range(14, 0))
+            ->map(fn (int $daysAgo) => now()->copy()->subDays($daysAgo)->startOfDay());
+
+        $values = $dates
+            ->map(function (Carbon $date) use ($query): int {
+                $dayQuery = clone $query;
+
+                return (int) $dayQuery
+                    ->where('created_at', '<=', $date->copy()->endOfDay())
+                    ->count();
+            })
+            ->values();
+
+        $total = (int) (clone $query)->count();
+        $previous = $values->count() > 1 ? (int) $values[$values->count() - 2] : $total;
+        $delta = max(0, $total - $previous);
+        $min = (int) $values->min();
+        $max = (int) $values->max();
+        $range = max(1, $max - $min);
+        $step = $values->count() > 1 ? 100 / ($values->count() - 1) : 100;
+
+        $points = $values
+            ->map(function (int $value, int $index) use ($min, $range, $step): string {
+                $x = round($index * $step, 2);
+                $y = round(86 - (($value - $min) / $range * 58), 2);
+
+                return $x.','.$y;
+            })
+            ->implode(' ');
+
+        return [
+            'label' => $label,
+            'icon' => $icon,
+            'total' => $total,
+            'total_label' => $this->compactNumber($total),
+            'delta' => $delta,
+            'dates' => $dates
+                ->map(fn (Carbon $date) => $date->translatedFormat('j M'))
+                ->all(),
+            'values' => $values->all(),
+            'points' => $points,
+        ];
+    }
+
+    private function compactNumber(int $value): string
+    {
+        if ($value >= 1000000) {
+            return number_format($value / 1000000, 1, ',', '.').'M';
+        }
+
+        if ($value >= 1000) {
+            return number_format($value / 1000, 1, ',', '.').'B';
+        }
+
+        return number_format($value, 0, ',', '.');
     }
 }

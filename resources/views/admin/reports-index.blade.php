@@ -55,7 +55,7 @@
                                 <form method="post" action="{{ route('admin.comments.destroy', $report->reportable) }}" onsubmit="return confirm('Bu yorum silinsin mi?')">
                                     @csrf
                                     @method('DELETE')
-                                    <button>Yorumu sil</button>
+                                    <button class="button danger">Yorumu sil</button>
                                 </form>
                             @endif
                         </article>

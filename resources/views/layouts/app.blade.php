@@ -169,6 +169,7 @@
             <a href="{{ route('search', ['type' => 'manga']) }}">Manga</a>
             <a href="{{ route('people.index') }}">Kişiler</a>
             <a href="{{ route('studios.index') }}">Stüdyolar</a>
+            <a href="{{ route('site-stats') }}">Site İstatistikleri</a>
             <a href="{{ route('api.docs') }}">API</a>
             <a href="{{ route('about') }}">Hakkımızda</a>
             <a href="{{ route('privacy') }}">Gizlilik Politikası</a>

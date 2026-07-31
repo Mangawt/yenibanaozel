@@ -13,11 +13,8 @@ use App\Services\Settings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class AdminController extends Controller
@@ -139,6 +136,8 @@ class AdminController extends Controller
 
     public function queue(Request $request, ImportQueueService $queue, Settings $settings)
     {
+        $queue->clearStatus(ImportQueue::STATUS_COMPLETED);
+
         $filters = $request->validate([
             'status' => ['nullable', 'in:pending,running,completed,failed,skipped'],
             'type' => ['nullable', 'in:anime,manga'],
@@ -168,6 +167,10 @@ class AdminController extends Controller
         return view('admin.import-queue', [
             'settings' => $settings->allPublic(),
             'stats' => $queue->stats(),
+            'latestImportedMedia' => Media::query()
+                ->whereIn('type', ['anime', 'manga'])
+                ->latest()
+                ->first(['id', 'type', 'slug', 'title', 'created_at']),
             'preview' => $request->session()->get('import_queue_preview'),
             'items' => $items->paginate(30)->withQueryString(),
         ]);
@@ -175,24 +178,9 @@ class AdminController extends Controller
 
     public function queueStats(ImportQueueService $queue)
     {
-        return response()->json($queue->stats());
-    }
+        $queue->clearStatus(ImportQueue::STATUS_COMPLETED);
 
-    public function status(Settings $settings, ImportQueueService $queue)
-    {
-        return view('admin.status', [
-            'settings' => $settings->allPublic(),
-            'queueStats' => $queue->stats(),
-            'jobs' => [
-                'waiting' => $this->tableCount('jobs'),
-                'failed' => $this->tableCount('failed_jobs'),
-                'batches' => $this->tableCount('job_batches'),
-            ],
-            'latestFailedJobs' => Schema::hasTable('failed_jobs')
-                ? DB::table('failed_jobs')->latest('failed_at')->limit(10)->get()
-                : collect(),
-            'logs' => $this->recentLogs(),
-        ]);
+        return response()->json($queue->stats());
     }
 
     public function previewQueue(Request $request, ImportQueueService $queue): RedirectResponse
@@ -422,53 +410,4 @@ class AdminController extends Controller
     private function isAdmin(?string $role): bool
     {
         return in_array($role, ['super_admin', 'admin'], true);
-    }
-
-    private function recentLogs(): array
-    {
-        $files = [
-            'Import' => 'import',
-            'Scanner' => 'scanner',
-            'Güvenlik' => 'security',
-            'Laravel' => 'laravel',
-        ];
-
-        return collect($files)
-            ->mapWithKeys(function (string $channel, string $name): array {
-                $path = $this->latestLogPath($channel);
-
-                if (! $path) {
-                    return [$name => []];
-                }
-
-                $content = rescue(fn (): string => File::get($path), '', report: false);
-
-                $lines = collect(preg_split('/\R/', $content) ?: [])
-                    ->filter()
-                    ->take(-40)
-                    ->values()
-                    ->all();
-
-                return [$name => $lines];
-            })
-            ->all();
-    }
-
-    private function latestLogPath(string $channel): ?string
-    {
-        $single = storage_path("logs/{$channel}.log");
-
-        if (File::exists($single)) {
-            return $single;
-        }
-
-        $matches = File::glob(storage_path("logs/{$channel}-*.log"));
-
-        return collect($matches)->sortDesc()->first();
-    }
-
-    private function tableCount(string $table): int
-    {
-        return Schema::hasTable($table) ? DB::table($table)->count() : 0;
-    }
-}
+    }}

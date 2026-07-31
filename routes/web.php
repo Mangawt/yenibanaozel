@@ -77,6 +77,7 @@ Route::get('/u/{username}', [ProfileController::class, 'show'])->name('profile.s
 Route::get('/u/{username}/takipciler', [ProfileController::class, 'followers'])->name('profile.followers');
 Route::get('/u/{username}/takip', [ProfileController::class, 'following'])->name('profile.following');
 Route::get('/hakkimizda', [PageController::class, 'about'])->name('about');
+Route::get('/site-istatistikleri', [PageController::class, 'siteStats'])->name('site-stats');
 Route::get('/gizlilik-politikasi', [PageController::class, 'privacy'])->name('privacy');
 Route::get('/kullanim-sartlari', [PageController::class, 'terms'])->name('terms');
 Route::get('/hesap-silme', [PageController::class, 'accountDeletion'])->name('account-deletion');
@@ -152,7 +153,6 @@ Route::prefix('admin')->name('admin.')->middleware('admin.user')->group(function
     Route::post('/sync/{syncState}/resume', [AdminSyncController::class, 'resume'])->middleware('admin.write')->name('sync.resume');
     Route::post('/sync/{syncState}/stop', [AdminSyncController::class, 'stop'])->middleware('admin.write')->name('sync.stop');
     Route::delete('/sync/{syncState}', [AdminSyncController::class, 'destroy'])->middleware('admin.write')->name('sync.destroy');
-    Route::get('/status', [AdminController::class, 'status'])->name('status');
     Route::get('/settings', [AdminController::class, 'settings'])->name('settings');
     Route::post('/settings', [AdminController::class, 'saveSettings'])->middleware('admin.write')->name('settings.save');
     Route::post('/settings/test-translation', [AdminController::class, 'testTranslation'])->middleware('admin.write')->name('settings.translation.test');
